@@ -122,26 +122,3 @@ EVSE ID: The id returned from creating the EVSE
 CEM Ski: The Ski returned from calling the GET request on the CEM  
 EV ID: The id returned from creating the EV
 
-## How to load the docker image
-
-### Step 1: Import the image from downloaded archive
-
-```bash
-docker load < docker-eebus-hub-vx.y.z.tar.xz
-```
-
-### Step 2: Create a container
-
-* using bridged networking mode:
-
-```bash
-docker run -p $PORT:8080 eebus-hub:vx.y.z
-```
-
-where $PORT is the desired published port.
-
-* using host networking mode:
-
-```bash
-docker run --network=host eebus-hub:vx.y.z
-```
