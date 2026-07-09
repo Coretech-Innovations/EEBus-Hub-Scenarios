@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// in this use story we are adding CEM Device, Heatpump and connecting them with each other
+// in this use story we are adding HEMS Device, Heatpump and connecting them with each other
 // After the connection is done, we create an OHPCF announcement with power limits and timing constraints:
 // - power(goodApproximation): 15000 W
 // - powerMaximum: 16000 W
@@ -28,9 +28,9 @@ func main() {
 
 	time.Sleep(5 * time.Second)
 
-	// Get CEM Ski
-	resp := sendRequest("GET", "/cem", nil)
-	cemSKI := resp.(map[string]any)["ski"]
+	// Get HEMS Ski
+	resp := sendRequest("GET", "/hems", nil)
+	hemsSKI := resp.(map[string]any)["ski"]
 
 	// Add EVSE
 	HeatPumpInfo := map[string]any{
@@ -72,22 +72,22 @@ func main() {
 	// start the simulation session
 	simulationData := map[string]any{
 		"action":      "start",
-		"speedFactor": 1,
+		"speedFactor": 60,
 	}
 	sendRequest("POST", "/sim", simulationData)
 
-	endPoint := fmt.Sprintf("/heatpump/%d/cem", int(heatPumpID.(float64)))
-	// Running the Heat Pump to connect with the CEM
+	endPoint := fmt.Sprintf("/heatpump/%d/trust", int(heatPumpID.(float64)))
+	// Running the Heat Pump to connect with the HEMS
 	resp = sendRequest("POST", endPoint, map[string]any{
-		"remoteSKI": cemSKI,
+		"remoteSKI": hemsSKI,
 	})
 	heatPumpSKI := resp.(map[string]any)["ski"]
 
-	// trusting the Heat Pump from the CEM Side
-	sendRequest("POST", "/cem/trust", map[string]any{
+	// trusting the Heat Pump from the HEMS Side
+	sendRequest("POST", "/hems/trust", map[string]any{
 		"remoteSKI": heatPumpSKI,
 	})
-	fmt.Println("Ski = ", heatPumpSKI, " is trusted by the CEM")
+	fmt.Println("Ski = ", heatPumpSKI, " is trusted by the HEMS")
 
 	var announcmentInfo map[string]any = map[string]any{
 		"isPausable":               true,
@@ -110,104 +110,98 @@ func main() {
 	}
 
 	resp = sendRequest("GET", "/heatpump/list", nil)
-	state := resp.([]map[string]any)[0]["DeviceInfo"].(map[string]any)["state"]
-	fmt.Printf("Heat Pump OHPCF current state: %s\n", state.(string))
+	state := firstHeatPumpState(resp)
+	fmt.Printf("Heat Pump OHPCF current state: %s\n", state)
 
-	// send request to make CEM send a start time to the Heat Pump
+	// send request to make HEMS send a start time to the Heat Pump
 	resp = sendRequest("GET", "/heatpump/list", nil)
-	deviceAddress := resp.([]map[string]any)[0]["deviceAddress"]
+	deviceAddress := firstHeatPumpAddress(resp)
 
 	time.Sleep(3 * time.Second)
 
 	startime := 5
-	endPoint = fmt.Sprintf("/cem/SendOhpcfStartTime/%s", deviceAddress.(string))
+	endPoint = fmt.Sprintf("/hems/SendOhpcfStartTime/%s", deviceAddress)
 	resp = sendRequest("POST", endPoint, map[string]any{
 		"startTime": float64(startime),
 	})
 
-	fmt.Println("CEM sent start time with value 5 seconds to the Heat Pump")
-	fmt.Println("Heatpump OHPCF state is : Scheduled")
+	fmt.Println("HEMS sent start time with value 5 seconds to the Heat Pump")
+	resp = sendRequest("GET", "/heatpump/list", nil)
+	state = firstHeatPumpState(resp)
+	fmt.Printf("Heat Pump OHPCF current state: %s\n", state)
 
 	for i := 0; i < startime; i++ {
 		resp = sendRequest("GET", "/heatpump/list", nil)
-		state := resp.([]map[string]any)[0]["DeviceInfo"].(map[string]any)["state"]
-		fmt.Printf("Heat Pump OHPCF current state: %s, %d seconds passed\n", state.(string), i+1)
+		state := firstHeatPumpState(resp)
+		fmt.Printf("Heat Pump OHPCF current state: %s, %d seconds passed\n", state, i+1)
 		time.Sleep(1 * time.Second)
 	}
 	time.Sleep(2 * time.Second)
 
 	resp = sendRequest("GET", "/heatpump/list", nil)
-	state = resp.([]map[string]any)[0]["DeviceInfo"].(map[string]any)["state"]
-	fmt.Printf("Start time is reached, Heat Pump OHPCF current state: %s\n", state.(string))
+	state = firstHeatPumpState(resp)
+	fmt.Printf("Start time is reached, Heat Pump OHPCF current state: %s\n", state)
 
 	// send request to pause the Heat Pump OHPCF session
-	fmt.Println("CEM can not pause the Heat Pump OHPCF session because minimum active duration is not reached")
+	fmt.Println("HEMS can not pause the Heat Pump OHPCF session because minimum active duration is not reached")
 	for i := 0; i < 5; i++ {
 		fmt.Println("Waiting minimum active duration to be reached...", i+1, "seconds passed")
 		time.Sleep(1 * time.Second)
 	}
 	time.Sleep(2 * time.Second)
 
-	endPoint = fmt.Sprintf("/cem/ChangeOhpcfState/%s", deviceAddress.(string))
+	endPoint = fmt.Sprintf("/hems/ChangeOhpcfState/%s", deviceAddress)
 	resp = sendRequest("PATCH", endPoint, map[string]any{
 		"state": "paused",
 	})
-	fmt.Println("CEM sent pause command to the Heat Pump")
-
+	fmt.Println("HEMS sent pause command to the Heat Pump")
 
 	resp = sendRequest("GET", "/heatpump/list", nil)
-	state = resp.([]map[string]any)[0]["DeviceInfo"].(map[string]any)["state"]
-	fmt.Printf("Heat Pump OHPCF current state: %s\n", state.(string))
+	state = firstHeatPumpState(resp)
+	fmt.Printf("Heat Pump OHPCF current state: %s\n", state)
 
-	
 	// send request to resume the Heat Pump OHPCF session
-	fmt.Println("CEM can not resume the Heat Pump OHPCF session because minimum pause duration is not reached")
+	fmt.Println("HEMS can not resume the Heat Pump OHPCF session because minimum pause duration is not reached")
 	for i := 0; i < 5; i++ {
 		fmt.Println("Waiting minimum pause duration to be reached...", i+1, "seconds passed")
 		time.Sleep(1 * time.Second)
 	}
 	time.Sleep(2 * time.Second)
 
-	endPoint = fmt.Sprintf("/cem/ChangeOhpcfState/%s", deviceAddress.(string))
+	endPoint = fmt.Sprintf("/hems/ChangeOhpcfState/%s", deviceAddress)
 	resp = sendRequest("PATCH", endPoint, map[string]any{
 		"state": "running",
 	})
 
-	fmt.Println("CEM sent resume command to the Heat Pump")
+	fmt.Println("HEMS sent resume command to the Heat Pump")
 
 	resp = sendRequest("GET", "/heatpump/list", nil)
-	state = resp.([]map[string]any)[0]["DeviceInfo"].(map[string]any)["state"]
-	fmt.Printf("Heat Pump OHPCF current state: %s\n", state.(string))
+	state = firstHeatPumpState(resp)
+	fmt.Printf("Heat Pump OHPCF current state: %s\n", state)
 
-	// send request to abort the Heat Pump OHPCF session
-	fmt.Println("CEM can not abort the Heat Pump OHPCF session because minimum active duration is not reached")
-	for i := 0; i < 5; i++ {
-		fmt.Println("Waiting minimum active duration to be reached...", i+1, "seconds passed")
-		time.Sleep(1 * time.Second)
+	// wait for the heat pump to complete its optional power consumption process and transition to completed state
+	fmt.Println("Waiting the Heat Pump to complete its optional power consumption process...")
+
+	for {
+		resp = sendRequest("GET", "/heatpump/list", nil)
+		state = firstHeatPumpState(resp)
+		if state == "completed" {
+			break
+		}
 	}
-	time.Sleep(2 * time.Second)
-
-	endPoint = fmt.Sprintf("/cem/ChangeOhpcfState/%s", deviceAddress.(string))
-	resp = sendRequest("PATCH", endPoint, map[string]any{
-		"state": "invalid",
-	})
-
-	fmt.Println("CEM sent abort command to the Heat Pump")
-	resp = sendRequest("GET", "/heatpump/list", nil)
-	state = resp.([]map[string]any)[0]["DeviceInfo"].(map[string]any)["state"]
-	fmt.Printf("Heat Pump OHPCF current state: %s\n", state.(string))
+	fmt.Printf("Heat Pump OHPCF current state: %s\n", state)
 
 	// wait for the heat pump to clear its power sequence and transition to inactive state
 	fmt.Println("Waiting the Heat Pump to clear its power sequence and transition to inactive state...")
 
 	for {
 		resp = sendRequest("GET", "/heatpump/list", nil)
-		state = resp.([]map[string]any)[0]["DeviceInfo"].(map[string]any)["state"]
-		if state.(string) == "inactive" {
+		state = firstHeatPumpState(resp)
+		if state == "inactive" {
 			break
 		}
 	}
-	fmt.Printf("Heat Pump OHPCF current state: %s\n", state.(string))
+	fmt.Printf("Heat Pump OHPCF current state: %s\n", state)
 }
 
 func simulationReset() {
@@ -217,6 +211,33 @@ func simulationReset() {
 		"speedFactor": 0,
 	}
 	sendRequest("POST", "/sim", simulationData)
+}
+
+// firstHeatPumpState returns the OHPCF state of the first heat pump in a
+// /heatpump/list response, or "" if the list is momentarily empty (which can
+// happen while the heat pump is transitioning between states).
+func firstHeatPumpState(resp any) string {
+	list, ok := resp.([]map[string]any)
+	if !ok || len(list) == 0 {
+		return ""
+	}
+	info, ok := list[0]["DeviceInfo"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	state, _ := info["state"].(string)
+	return state
+}
+
+// firstHeatPumpAddress returns the device address of the first heat pump in a
+// /heatpump/list response, or "" if the list is momentarily empty.
+func firstHeatPumpAddress(resp any) string {
+	list, ok := resp.([]map[string]any)
+	if !ok || len(list) == 0 {
+		return ""
+	}
+	address, _ := list[0]["deviceAddress"].(string)
+	return address
 }
 
 func sendRequest(method string, url string, payload any) any {

@@ -1,16 +1,20 @@
-# OPEV
+# OPEV — Overload Protection by EV Current Curtailment (Web UI)
 
 ## Description
 
-In this user story, We are adding Energy guard and EVSE, then connection them with each other.  
-After connection is done, we are adding an EV and connecting it with the EVSE with current limits:
-- min: 6
-- max: 10
+This example demonstrates the **Overload Protection by EV Current Curtailment (OPEV)**
+use case using the EEBUS Hub web interface instead of the REST API.
 
-The EV should be supplied with the max current 10A as the available fuse limit in the Energy Guard is 40A and there is no other devices connected to the system
+A HEMS and an EVSE are created and connected, then an EV with a current range of 6–10 A
+per phase is added and plugged into the EVSE.
 
-## how to run
+Because the site's available current (a 40 A fuse budget) far exceeds the EV's demand and
+nothing else is drawing power, the HEMS lets the EV charge at its maximum: **10 A on
+every phase**.
 
-import the configuration file in the simulation and start simulation
+## How to Run
 
-![alt text](<Screenshot 2024-09-12 111917.png>)
+Import the provided configuration file (`OPEV.json`) into the simulation from the web
+interface, then start the simulation.
+
+![OPEV simulation in the web interface](<Screenshot 2024-09-12 111917.png>)

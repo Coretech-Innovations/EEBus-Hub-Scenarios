@@ -13,75 +13,29 @@ For researchers, academics, and early-stage startups you can obtain a non-commer
 
 
 ## Supported Use Cases
-| UseCase                                            | Scenario | Server | Client | Usecase Category |
-| :------------------------------------------------- |:---------:|:------:|:------:|:----------------:|
-| Limitation of Power Consumption (LPC)            |  1  | ✅ | ✅ | Grid |
-|                                                  |  2  | ✅ | ✅ |  |
-|                                                  |  3  | ✅ | ✅ |  |
-|                                                  |  4  | ✅ | ✅ |  |
-|                                                  |  |  |   |  |
-| Limitation of Power Production (LPP)             |  1  | ✅ | ✅ | Grid |
-|                                                  |  2  | ✅ | ✅ |  |
-|                                                  |  3  | ✅ | ✅ |  |
-|                                                  |  4  | ✅ | ✅ |  |
-|                                                  |  |  |   |  |
-| Monitoring of Power Consumption (MPC)            |  1  | ✅ | ✅ | Grid |
-|                                                  |  2  | ✅ | ✅ |  |
-|                                                  |  3  | ✅ | ✅ |  |
-|                                                  |  4  | ✅ | ✅ |  |
-|                                                  |  5  | ✅ | ✅ |  |
-|                                                  |  |  |   |  |
-| EV Commissioning and Configuration (EVCC)        |  1  | ✅ | ✅ | E-mobility |
-|                                                  |  2  | - | - |  |
-|                                                  |  3  | - | - |  |
-|                                                  |  4  | - | - |  |
-|                                                  |  5  | - | - |  |
-|                                                  |  6  | ✅ | ✅ |  |
-|                                                  |  7  | ✅ | ✅ |  |
-|                                                  |  8  | ✅ | ✅ |  |
-|                                                  |  |  |   |  |
-| EVSE Commissioning and Configuration (EVSECC)    |  1  | ✅ | ✅ | E-mobility |
-|                                                  |  2  | ✅ | ✅ |  |
-|                                                  |  |  |  |  |
-| EV Charging Electricity Measurement (EVEM)       |  1  | ✅ | ✅ | E-mobility |
-|                                                  |  2  | - | - |  |
-|                                                  |  3  | - | - |  |
-|                                                  |  |  |   |  |
-| Overload Protection by EV current curtailment (OPEV)|  1 | ✅ | ✅ | E-mobility |
-|                                                  |  2  | ✅ | ✅ |  |
-|                                                  |  3  | ✅ | ✅ |  |
-|                                                  |  |  |   |  |
-| EV State of Charge (EVSOC)                       |  1  | ✅ | ✅ | E-mobility |
-|                                                  |  2  | ✅ | ✅ |  |
-|                                                  |  3  | ✅ | ✅ |  |
-|                                                  |  4  | ✅ | ✅ |  |
-| EV Charging Electricity Measurement (EVCEM)      |  1  | ✅ | ✅ | E-mobility |
-|                                                  |  2  | - | - |  |
-|                                                  |  |  |   |  |
-| Monitoring of Inverter (MOI)                     |  1  | ✅ | ✅ | Inverter |
-|                                                  |  2  | ✅ | ✅ |  |
-|                                                  |  3  | ✅ | ✅ |  |
-|                                                  |  4  | ✅ | ✅ |  |
-|                                                  |  5  | ✅ | ✅ |  |
-|                                                  |  6  | ✅ | ✅ |  |
-|                                                  |  7  | ✅ | ✅ |  |
-|                                                  |  |  |   |  |
-| Monitoring of Battery (MOB)                      |  1  | ✅ | ✅ | Inverter |
-|                                                  |  2  | ✅ | ✅ |  |
-|                                                  |  3  | ✅ | ✅ |  |
-|                                                  |  4  | ✅ | ✅ |  |
-|                                                  |  5  | ✅ | ✅ |  |
-|                                                  |  6  | ✅ | ✅ |  |
-|                                                  |  7  | ✅ | ✅ |  |
-|                                                  |  8  | ✅ | ✅ |  |
-|                                                  |  9  | ✅ | ✅ |  |
-| Optimization of Self-Consumption by Heat Pump Compressor Flexibility (OHPCF) |  1  | ✅ | ✅ | HVAC |
-|                                                  |  2  | ✅ | ✅ |  |
 
+| Use Case | Category | Scenarios | Server | Client |
+|:---------|:---------|:---------:|:------:|:------:|
+| Limitation of Power Consumption (LPC) | Grid | 1–4 | ✅ | ✅ |
+| Limitation of Power Production (LPP) | Grid | 1–4 | ✅ | ✅ |
+| Monitoring of Power Consumption (MPC) | Grid | 1–5 | ✅ | ✅ |
+| Monitoring of Grid Connection Point (MGCP) | Grid | 1–7 | — | — |
+| EV Commissioning and Configuration (EVCC) | E-mobility | 1,2,3,6,7,8 | ✅ | ✅ |
+| EVSE Commissioning and Configuration (EVSECC) | E-mobility | 1–2 | ✅ | ✅ |
+| Overload Protection by EV Current Curtailment (OPEV) | E-mobility | 1–3 | ✅ | ✅ |
+| EV State of Charge (EVSOC) | E-mobility | 1–4 | ✅ | ✅ |
+| EV Charging Electricity Measurement (EVCEM) | E-mobility | 1 | ✅ | ✅ |
+| Optimization of Self Consumption During EV Charging (OSCEV) | E-mobility | 1,2,3,4,5,6 | ✅ | ✅ |
+| Coordinated EV Charging (CEVC) | E-mobility | — | — | — |
+| Monitoring of Inverter (MOI) | Inverter | 1–7 | ✅ | ✅ |
+| Monitoring of Battery (MOB) | Inverter | 1–9 | ✅ | ✅ |
+| Monitoring of PV String (MPS) | Inverter | – | - | - |
+| Control of Battery (COB) | Inverter | 1-5 | ✅ | ✅ |
+| Optimization of Self-Consumption by Heat Pump Compressor Flexibility (OHPCF) | HVAC | 1–2 | ✅ | ✅ |
+| Incentive Table based Power Consumption Management (ITPCM) | HVAC | – | - | - |
+| Node Identification (NID) | Generic | — | — | — |
 
-"✅" - Supported
-
-"-"  - Not Supported yet
+✅ Supported &nbsp;&nbsp; — Not yet supported
 
 ## Clone the project
 

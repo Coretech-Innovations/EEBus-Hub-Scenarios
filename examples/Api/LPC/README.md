@@ -1,16 +1,22 @@
-
-# LPC
+# LPC — Limitation of Power Consumption
 
 ## Description
 
-User Story: We are integrating an Energy Guard with an EVSE and establishing their connection. Post-connection, we will monitor the active limit initial values in the EVSE.
+A HEMS and an EVSE are created and connected. Once the connection is established, the
+example reads the EVSE's initial limit state and then exercises a full limit cycle:
 
-Steps:
+1. **Send an active limit** — the HEMS sends an active power consumption limit with a
+   value and a duration.
+2. **Observe the EVSE** — the EVSE applies the limit and reports the new active power
+   limit and a `Limited` state.
+3. **Watch it expire** — once the duration elapses, the EVSE releases the limit and
+   returns to its `Unlimited/Controlled` state.
 
-- Send Active Limit: Specify the value and duration.
-- Update EVSE State: Ensure the EVSE reflects its new limit.
-- Revert State: Once the duration elapses, the EVSE returns to its unlimited/controlled state.
+Throughout the run the example prints the EVSE's LPC state, active power limit, failsafe
+values, and power constraints so you can follow each transition.
 
-## How to run 
+## How to Run
 
+```bash
 go run ./examples/Api/LPC/LPC.go
+```

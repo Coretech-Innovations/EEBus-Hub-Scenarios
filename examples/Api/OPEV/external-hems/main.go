@@ -7,68 +7,52 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
-// in this use story we are adding CEM Device, EVSE and connecting them with each other
-// after connection is done we are adding an EV with current limits (min:6, max:10) on the three phases
-// the EV should be supplied with current 10A on all its phases as the available current is greater than 10A
+// in this user story we will add only simulated EV, and connect it to external HEMS
 
 var BaseIPAddress string = "http://localhost:8080/api/v1"
 
 func main() {
+	if len(os.Args) != 2 {
+		fmt.Println("Usage:")
+		fmt.Println("go run ./examples/Api/OPEV/external-hems <remoteSKI>")
+		return
+	}
 
-	// reset simulation session by deleting all components
+	// reset the simulation
 	simulationReset()
 
-	// start the simulation session
-	simulationData := map[string]any{
-		"action":      "start",
-		"speedFactor": 100,
-	}
-	sendRequest("POST", "/sim", simulationData)
-
-	// Get CEM Ski
-	resp := sendRequest("GET", "/cem", nil)
-	cemSKI := resp.(map[string]any)["ski"]
-
-	// Add EVSE
+	// add EVSE
 	evseInfo := map[string]any{
-		"deviceName": "Coretech EVSE WallBox",
+		"deviceName": "eSystems EVSE WallBox",
 		"deviceCode": "0001",
 		"vendor": map[string]any{
-			"name": "Coretech-Innovations",
+			"name": "eSystems",
 			"code": "60745",
 		},
 		"softwareRev": "0",
 		"hardwareRev": "0",
-		"brandName":   "Coretech-Innovations",
+		"brandName":   "eSystems",
 		"Manufacturer": map[string]any{
-			"label":       "Coretech-Innovations",
+			"label":       "eSystems",
 			"description": "Charging Station",
 		},
-		"deviceModel":  "EVSE",
-		"serialNumber": "00000002",
-		"port":         4712,
+		"deviceModel":         "EVSE",
+		"serialNumber":        "00000002",
+		"port":                4712,
+		"approveWriteLimit":   true,
+		"failsafeValue":       5000,
+		"failsafeDuration":    2,
+		"failSafeDurationMax": 24,
+		"nominalPower":        map[string]any{"min": 0, "max": 23000},
+		"nominalCurrent":      map[string]any{"min": 0, "max": 32},
 	}
-
-	// sending request to add EVSE
-	resp = sendRequest("POST", "/evse/add", evseInfo)
+	// sending request to add EVSE (entities can only be added while the simulation is stopped)
+	resp := sendRequest("POST", "/evse/add", evseInfo)
 	evseID := resp.(map[string]any)["id"]
-
-	fmt.Printf("A new EVSE Device is added with ID %d\n", int(evseID.(float64)))
-
-	endPoint := fmt.Sprintf("/evse/%d/cem", int(evseID.(float64)))
-	// Running the EVSE to connect with the CEM
-	resp = sendRequest("POST", endPoint, map[string]any{
-		"remoteSKI": cemSKI,
-	})
-	evseSKI := resp.(map[string]any)["ski"]
-	fmt.Println(evseSKI)
-	// trusting the EVSE from the CEM Side
-	sendRequest("POST", "/cem/trust", map[string]any{
-		"remoteSKI": evseSKI,
-	})
 
 	// add EV
 	var EVEntity map[string]any = map[string]any{
@@ -86,18 +70,32 @@ func main() {
 	resp = sendRequest("POST", "/ev/add", EVEntity)
 	evID := resp.(map[string]any)["id"]
 	fmt.Printf("A new EV Device is added with ID %d\n", int(evID.(float64)))
+
+	// start the simulation session (pairing is only allowed while it is running)
+	sendRequest("POST", "/sim", map[string]any{
+		"action":      "start",
+		"speedFactor": 1,
+	})
+
+	// Connecting the EVSE with external HEMS
+	endPoint := fmt.Sprintf("/evse/%d/trust", int(evseID.(float64)))
+	// Running the EVSE to connect with the HEMS
+	resp = sendRequest("POST", endPoint, map[string]any{
+		"remoteSKI": os.Args[1],
+	})
+	evseSKI := resp.(map[string]any)["ski"]
+	fmt.Printf("A new EVSE Device is added with ID %d\nLocal Ski: %s\n", int(evseID.(float64)), evseSKI.(string))
+
 	// connect EV to EVSE
 	endPoint = fmt.Sprintf("/ev/%d/evse/%d", int(evID.(float64)), int(evseID.(float64)))
 	sendRequest("POST", endPoint, nil)
 
-	time.Sleep(3 * time.Second)
 	for {
 		endPoint = fmt.Sprintf("/ev/%d/LoadControlLimit", int(evID.(float64)))
 		resp = sendRequest("GET", endPoint, nil)
 		fmt.Println(resp.([]map[string]any))
 		time.Sleep(2 * time.Second)
 	}
-
 }
 
 func simulationReset() {
@@ -115,6 +113,8 @@ func simulationReset() {
 		endpoint := fmt.Sprintf("/ev/%d", int(ev["evId"].(float64)))
 		sendRequest("DELETE", endpoint, nil)
 	}
+	// delete the HEMS
+	sendRequest("DELETE", "/hems", nil)
 }
 
 func sendRequest(method string, url string, payload any) any {

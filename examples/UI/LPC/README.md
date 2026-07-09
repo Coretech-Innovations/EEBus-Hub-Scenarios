@@ -1,14 +1,26 @@
-
-# LPC1
+# LPC — Limitation of Power Consumption (Web UI)
 
 ## Description
 
-User Story: We are integrating an Energy Guard with an EVSE and establishing their connection. Post-connection, we will monitor the active limit initial values in the EVSE.
+This example walks through the **Limitation of Power Consumption (LPC)** use case using
+the EEBUS Hub web interface instead of the REST API.
 
-Steps:
+A HEMS and an EVSE are created and connected. Once they are paired, the HEMS sends an
+active power consumption limit with a value and a duration. The EVSE applies the limit
+and reports a `Limited` state; when the duration elapses it releases the limit and
+returns to its `Unlimited/Controlled` state.
 
-- Send Active Limit: Specify the value and duration.
+## How to Run
 
-- Update EVSE State: Ensure the EVSE reflects its new limit.
+Create the HEMS and the EVSE from the web interface, connect them, then send an active
+power consumption limit and watch the EVSE's state and active power limit update.
 
-- Revert State: Once the duration elapses, the EVSE returns to its unlimited/controlled state.
+The screenshots below show the sequence in order:
+
+![Step 1](<Screenshot 2024-10-31 124518-1st.png>)
+
+![Step 2](<Screenshot 2024-10-31 124757-2nd.png>)
+
+![Step 3](<Screenshot 2024-10-31 124644-3rd.png>)
+
+![Step 4](<Screenshot 2024-10-31 124843-4th.png>)

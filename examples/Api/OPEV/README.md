@@ -1,15 +1,28 @@
-# OPEV
+# OPEV — Overload Protection by EV Current Curtailment
 
-## Description
+Runnable examples of the **Overload Protection by EV Current Curtailment (OPEV)** use
+case, in which a HEMS keeps the total current drawn by one or more EVs within the
+building's available capacity by curtailing charging current.
 
-In this user story, We are adding Energy guard and EVSE, then connection them with each other.  
-After connection is done, we are adding an EV and connecting it with the EVSE with current limits:
-- min: 6
-- max: 10
+## Actors
 
-The EV should be supplied with the max current 10A as the available fuse limit in the Energy Guard is 40A and there is no other devices connected to the system
+- **HEMS** — enforces the site current limit and distributes the available current.
+- **EV / EVSE** — the charging station and vehicle whose current is curtailed.
 
-## How to Run
-```
-go run ./examples/Api/OPEV/OPEV.go
+## Examples
+
+| Example | What it demonstrates |
+|---------|----------------------|
+| `single-ev-full-current` | A single EV charges at its maximum current when the site has ample capacity. |
+| `household-load-stops-ev` | An uncontrollable household load consumes the whole current budget, so the EV is curtailed to zero. |
+| `fair-share-two-evs` | Two EVs share the available current when both fit under the site limit. |
+| `fair-share-with-household-load` | Two EVs share a reduced current budget after a household load takes part of the capacity. |
+| `external-ev` | A HEMS curtails the current of an external EV identified by its SKI. |
+| `external-hems` | A simulated EV receives its current limits from an external HEMS identified by its SKI. |
+| `two-evs-external-hems` | Two EV/EVSE pairs receive their limits from an external HEMS. |
+
+Run any example from the repository root, for example:
+
+```bash
+go run ./examples/Api/OPEV/single-ev-full-current
 ```
