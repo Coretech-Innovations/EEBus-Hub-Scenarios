@@ -46,33 +46,37 @@ git clone https://github.com/Coretech-Innovations/EEBus-Hub.git
 
 ## How to Use
 
-This is a simple API calls for adding EVSE and EV and connecting them with the CEM in the system
+These are simple API calls for adding an EVSE and an EV and connecting them with the HEMS
+in the system. The HEMS is a built-in device that already exists when the Hub starts.
+
+Entities can only be added while the simulation is stopped, and pairing is only allowed
+while it is running, so the order below matters.
 
 ```bash
-# adding new EVSE
-curl -X POST http://localhost:8080/api/v1/evse/add  -H 'Content-Type: application/json'  -d '{"deviceName":"Coretech EVSE WLBX", "deviceCode":"0002","deviceModel":"Charging Station","brandName":"Coretech Innovations","vendor":{"name":"Coretech Innovations","code":"60745"},"serialNumber":"SN7640"}'
+# Get the SKI of the HEMS
+curl -X GET http://localhost:8080/api/v1/hems
 
-# Trusting the created EVSE from the CEM side
-curl -X POST http://localhost:8080/api/v1/cem/trust -H 'Content-Type: application/json' -d '{"remoteSki": <EVSE Ski>}'
-
-# Get the SKI of the CEM
-curl -X GET http://localhost:8080/api/v1/cem 
-
-# Pairing the EVSE with the CEM
-curl -X POST http://localhost:8080/api/v1/evse/<EVSE ID>/cem -H 'Content-Type: application/json' -d '{"remoteski": <CEM Ski>}'
+# adding new EVSE (the failsafe and nominal power/current values are required)
+curl -X POST http://localhost:8080/api/v1/evse/add -H 'Content-Type: application/json' -d '{"deviceName":"Coretech EVSE WLBX", "deviceCode":"0002","deviceModel":"Charging Station","brandName":"Coretech Innovations","vendor":{"name":"Coretech Innovations","code":"60745"},"serialNumber":"SN7640","failsafeValue":0,"failsafeDuration":2,"failSafeDurationMax":24,"nominalPower":{"min":1380,"max":22080},"nominalCurrent":{"min":6,"max":32}}'
 
 # adding new EV
 curl -X POST http://localhost:8080/api/v1/ev/add -H 'Content-Type: application/json' -d '{"device": {"name": "Taycan", "code": "0003", "serialNumber": "SN1235"},"currentLimits": {"min": 5, "max": 10}, "asymmetricCharging": false}'
 
+# starting the simulation
+curl -X POST http://localhost:8080/api/v1/sim -H 'Content-Type: application/json' -d '{"action": "start", "speedFactor": 100}'
+
+# Pairing the EVSE with the HEMS; the response carries the EVSE's own SKI
+curl -X POST http://localhost:8080/api/v1/evse/<EVSE ID>/trust -H 'Content-Type: application/json' -d '{"remoteSKI": "<HEMS Ski>"}'
+
+# Trusting the created EVSE from the HEMS side
+curl -X POST http://localhost:8080/api/v1/hems/trust -H 'Content-Type: application/json' -d '{"remoteSKI": "<EVSE Ski>"}'
+
 # adding the created EV to the EVSE we created before
 curl -X POST http://localhost:8080/api/v1/ev/<EV ID>/evse/<EVSE ID>
-
-# starting the simulation
-curl -X POST http://localhost:8080/api/v1/sim -H 'Content-Type: application/json' -d '{"action": "start","tickRate": 1000,"simTimePerTick": 10}'
 ```
 
-EVSE Ski: The Ski returned from creating the EVSE  
+HEMS Ski: The Ski returned from calling the GET request on the HEMS  
 EVSE ID: The id returned from creating the EVSE  
-CEM Ski: The Ski returned from calling the GET request on the CEM  
+EVSE Ski: The Ski returned from pairing the EVSE with the HEMS  
 EV ID: The id returned from creating the EV
 
