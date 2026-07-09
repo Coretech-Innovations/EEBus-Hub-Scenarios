@@ -1084,12 +1084,12 @@
 					"response": []
 				},
 				{
-					"name": "EV EnergyGuardState",
+					"name": "EV HEMSState",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "http://localhost:8080/api/v1/ev/:evId/EnergyGuardState",
+							"raw": "http://localhost:8080/api/v1/ev/:evId/HEMSState",
 							"protocol": "http",
 							"host": [
 								"localhost"
@@ -1100,7 +1100,7 @@
 								"v1",
 								"ev",
 								":evId",
-								"EnergyGuardState"
+								"HEMSState"
 							],
 							"variable": [
 								{
@@ -1987,7 +1987,7 @@
 					"response": []
 				},
 				{
-					"name": "Run EVSE with CEM",
+					"name": "Run EVSE with HEMS",
 					"request": {
 						"method": "POST",
 						"header": [],
@@ -2001,7 +2001,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/evse/:evseId/cem",
+							"raw": "localhost:8080/api/v1/evse/:evseId/trust",
 							"host": [
 								"localhost"
 							],
@@ -2011,7 +2011,35 @@
 								"v1",
 								"evse",
 								":evseId",
-								"cem"
+								"trust"
+							],
+							"variable": [
+								{
+									"key": "evseId",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get EVSE Active Power Limit",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost:8080/api/v1/evse/:evseId/activePowerLimit",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"evse",
+								":evseId",
+								"activePowerLimit"
 							],
 							"variable": [
 								{
@@ -2040,34 +2068,6 @@
 								"evse",
 								":evseId",
 								"lpcCurrentState"
-							],
-							"variable": [
-								{
-									"key": "evseId",
-									"value": "1"
-								}
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Get EVSE Active Power Limit",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "localhost:8080/api/v1/evse/:evseId/lpcActivePowerLimit",
-							"host": [
-								"localhost"
-							],
-							"port": "8080",
-							"path": [
-								"api",
-								"v1",
-								"evse",
-								":evseId",
-								"lpcActivePowerLimit"
 							],
 							"variable": [
 								{
@@ -2190,28 +2190,14 @@
 						}
 					},
 					"response": []
-				}
-			]
-		},
-		{
-			"name": "CEM",
-			"item": [
+				},
 				{
-					"name": "Add CEM",
+					"name": "Get EVSE Electrical Measurements",
 					"request": {
-						"method": "POST",
+						"method": "GET",
 						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\r\n    \"vendorCode\": \"60745\",\r\n    \"deviceBrand\": \"Coretech\",\r\n    \"deviceModel\": \"CEM\",\r\n    \"serialNumber\": \"00000001\",\r\n    \"port\": 4712\r\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/add",
+							"raw": "localhost:8080/api/v1/evse/:evseId/electricalMeasurements",
 							"host": [
 								"localhost"
 							],
@@ -2219,7 +2205,49 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"evse",
+								":evseId",
+								"electricalMeasurements"
+							],
+							"variable": [
+								{
+									"key": "evseId",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "HEMS",
+			"item": [
+				{
+					"name": "Add HEMS",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"vendorCode\": \"60745\",\r\n    \"deviceBrand\": \"Coretech\",\r\n    \"deviceModel\": \"HEMS\",\r\n    \"serialNumber\": \"00000001\",\r\n    \"port\": 4712\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "localhost:8080/api/v1/hems/add",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"v1",
+								"hems",
 								"add"
 							]
 						}
@@ -2227,7 +2255,7 @@
 					"response": []
 				},
 				{
-					"name": "Update CEM",
+					"name": "Update HEMS",
 					"request": {
 						"method": "PATCH",
 						"header": [],
@@ -2241,7 +2269,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem",
+							"raw": "localhost:8080/api/v1/hems",
 							"host": [
 								"localhost"
 							],
@@ -2249,14 +2277,14 @@
 							"path": [
 								"api",
 								"v1",
-								"cem"
+								"hems"
 							]
 						}
 					},
 					"response": []
 				},
 				{
-					"name": "Add External CEM",
+					"name": "Add External HEMS",
 					"request": {
 						"method": "POST",
 						"header": [],
@@ -2270,7 +2298,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/addExt",
+							"raw": "localhost:8080/api/v1/hems/addExt",
 							"host": [
 								"localhost"
 							],
@@ -2278,7 +2306,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"addExt"
 							]
 						}
@@ -2286,12 +2314,12 @@
 					"response": []
 				},
 				{
-					"name": "Get CEM",
+					"name": "Get HEMS",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem",
+							"raw": "localhost:8080/api/v1/hems",
 							"host": [
 								"localhost"
 							],
@@ -2299,14 +2327,14 @@
 							"path": [
 								"api",
 								"v1",
-								"cem"
+								"hems"
 							]
 						}
 					},
 					"response": []
 				},
 				{
-					"name": "Modify external CEM",
+					"name": "Modify external HEMS",
 					"request": {
 						"method": "PATCH",
 						"header": [],
@@ -2320,7 +2348,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cemExt",
+							"raw": "localhost:8080/api/v1/hemsExt",
 							"host": [
 								"localhost"
 							],
@@ -2335,12 +2363,12 @@
 					"response": []
 				},
 				{
-					"name": "Get External CEM",
+					"name": "Get External HEMS",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cemExt",
+							"raw": "localhost:8080/api/v1/hemsExt",
 							"host": [
 								"localhost"
 							],
@@ -2360,7 +2388,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/extDevices",
+							"raw": "localhost:8080/api/v1/hems/extDevices",
 							"host": [
 								"localhost"
 							],
@@ -2368,7 +2396,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"extDevices"
 							]
 						}
@@ -2380,7 +2408,7 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "localhost:8080/api/v1/cem/extDevices",
+									"raw": "localhost:8080/api/v1/hems/extDevices",
 									"host": [
 										"localhost"
 									],
@@ -2388,7 +2416,7 @@
 									"path": [
 										"api",
 										"v1",
-										"cem",
+										"hems",
 										"extDevices"
 									]
 								}
@@ -2430,7 +2458,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/extDevices/data",
+							"raw": "localhost:8080/api/v1/hems/extDevices/data",
 							"host": [
 								"localhost"
 							],
@@ -2438,7 +2466,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"extDevices",
 								"data"
 							]
@@ -2447,12 +2475,12 @@
 					"response": []
 				},
 				{
-					"name": "Delete CEM",
+					"name": "Delete HEMS",
 					"request": {
 						"method": "DELETE",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem",
+							"raw": "localhost:8080/api/v1/hems",
 							"host": [
 								"localhost"
 							],
@@ -2460,19 +2488,19 @@
 							"path": [
 								"api",
 								"v1",
-								"cem"
+								"hems"
 							]
 						}
 					},
 					"response": []
 				},
 				{
-					"name": "Delete external CEM",
+					"name": "Delete external HEMS",
 					"request": {
 						"method": "DELETE",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cemExt",
+							"raw": "localhost:8080/api/v1/hemsExt",
 							"host": [
 								"localhost"
 							],
@@ -2501,7 +2529,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/config/FuseCurrentLimit",
+							"raw": "localhost:8080/api/v1/hems/config/FuseCurrentLimit",
 							"host": [
 								"localhost"
 							],
@@ -2509,7 +2537,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"config",
 								"FuseCurrentLimit"
 							]
@@ -2532,7 +2560,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/trust",
+							"raw": "localhost:8080/api/v1/hems/trust",
 							"host": [
 								"localhost"
 							],
@@ -2540,7 +2568,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"trust"
 							]
 						}
@@ -2562,7 +2590,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/trust",
+							"raw": "localhost:8080/api/v1/hems/trust",
 							"host": [
 								"localhost"
 							],
@@ -2570,7 +2598,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"trust"
 							]
 						}
@@ -2592,7 +2620,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/algorithm",
+							"raw": "localhost:8080/api/v1/hems/algorithm",
 							"host": [
 								"localhost"
 							],
@@ -2600,7 +2628,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"algorithm"
 							]
 						}
@@ -2613,7 +2641,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/algorithm",
+							"raw": "localhost:8080/api/v1/hems/algorithm",
 							"host": [
 								"localhost"
 							],
@@ -2621,7 +2649,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"algorithm"
 							]
 						}
@@ -2640,7 +2668,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/image",
+							"raw": "localhost:8080/api/v1/hems/image",
 							"host": [
 								"localhost"
 							],
@@ -2648,7 +2676,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"image"
 							]
 						}
@@ -2661,7 +2689,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/image",
+							"raw": "localhost:8080/api/v1/hems/image",
 							"host": [
 								"localhost"
 							],
@@ -2669,7 +2697,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"image"
 							]
 						}
@@ -2682,7 +2710,7 @@
 						"method": "DELETE",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/image",
+							"raw": "localhost:8080/api/v1/hems/image",
 							"host": [
 								"localhost"
 							],
@@ -2690,7 +2718,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"image"
 							]
 						}
@@ -2712,7 +2740,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/heartbeat",
+							"raw": "localhost:8080/api/v1/hems/heartbeat",
 							"host": [
 								"localhost"
 							],
@@ -2720,7 +2748,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"heartbeat"
 							]
 						}
@@ -2733,7 +2761,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/heartbeat",
+							"raw": "localhost:8080/api/v1/hems/heartbeat",
 							"host": [
 								"localhost"
 							],
@@ -2741,7 +2769,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"heartbeat"
 							]
 						}
@@ -2763,7 +2791,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/errorState",
+							"raw": "localhost:8080/api/v1/hems/errorState",
 							"host": [
 								"localhost"
 							],
@@ -2771,7 +2799,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"errorState"
 							]
 						}
@@ -2784,7 +2812,7 @@
 						"method": "DELETE",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/errorState",
+							"raw": "localhost:8080/api/v1/hems/errorState",
 							"host": [
 								"localhost"
 							],
@@ -2792,7 +2820,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"errorState"
 							]
 						}
@@ -2805,7 +2833,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/errorState",
+							"raw": "localhost:8080/api/v1/hems/errorState",
 							"host": [
 								"localhost"
 							],
@@ -2813,7 +2841,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"errorState"
 							]
 						}
@@ -2826,7 +2854,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/latestSentHeartbeat",
+							"raw": "localhost:8080/api/v1/hems/latestSentHeartbeat",
 							"host": [
 								"localhost"
 							],
@@ -2834,7 +2862,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"latestSentHeartbeat"
 							]
 						}
@@ -2847,7 +2875,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/latestReceivedHeartbeat/:deviceAddress",
+							"raw": "localhost:8080/api/v1/hems/latestReceivedHeartbeat/:deviceAddress",
 							"host": [
 								"localhost"
 							],
@@ -2855,7 +2883,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"latestReceivedHeartbeat",
 								":deviceAddress"
 							],
@@ -2875,7 +2903,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/connectedDevices",
+							"raw": "localhost:8080/api/v1/hems/connectedDevices",
 							"host": [
 								"localhost"
 							],
@@ -2883,7 +2911,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"connectedDevices"
 							]
 						}
@@ -2896,7 +2924,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/gridmeasurement",
+							"raw": "localhost:8080/api/v1/hems/gridmeasurement",
 							"host": [
 								"localhost"
 							],
@@ -2904,7 +2932,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"gridmeasurement"
 							]
 						}
@@ -2926,7 +2954,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/ActivePowerConsumptionLimit",
+							"raw": "localhost:8080/api/v1/hems/ActivePowerConsumptionLimit",
 							"host": [
 								"localhost"
 							],
@@ -2934,7 +2962,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"ActivePowerConsumptionLimit"
 							]
 						}
@@ -2956,7 +2984,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/ActivePowerConsumptionLimit",
+							"raw": "localhost:8080/api/v1/hems/ActivePowerConsumptionLimit",
 							"host": [
 								"localhost"
 							],
@@ -2964,7 +2992,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"ActivePowerConsumptionLimit"
 							]
 						}
@@ -2986,7 +3014,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/ActivePowerConsumptionLimit/:deviceAddress",
+							"raw": "localhost:8080/api/v1/hems/ActivePowerConsumptionLimit/:deviceAddress",
 							"host": [
 								"localhost"
 							],
@@ -2994,7 +3022,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"ActivePowerConsumptionLimit",
 								":deviceAddress"
 							],
@@ -3023,7 +3051,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/ActivePowerConsumptionLimit/:deviceAddress",
+							"raw": "localhost:8080/api/v1/hems/ActivePowerConsumptionLimit/:deviceAddress",
 							"host": [
 								"localhost"
 							],
@@ -3031,7 +3059,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"ActivePowerConsumptionLimit",
 								":deviceAddress"
 							],
@@ -3051,7 +3079,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/ActivePowerConsumptionLimit",
+							"raw": "localhost:8080/api/v1/hems/ActivePowerConsumptionLimit",
 							"host": [
 								"localhost"
 							],
@@ -3059,7 +3087,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"ActivePowerConsumptionLimit"
 							]
 						}
@@ -3081,7 +3109,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/FailsafeActivePowerLimit",
+							"raw": "localhost:8080/api/v1/hems/FailsafeActivePowerLimit",
 							"host": [
 								"localhost"
 							],
@@ -3089,7 +3117,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"FailsafeActivePowerLimit"
 							]
 						}
@@ -3111,7 +3139,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/FailsafeActivePowerLimit",
+							"raw": "localhost:8080/api/v1/hems/FailsafeActivePowerLimit",
 							"host": [
 								"localhost"
 							],
@@ -3119,7 +3147,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"FailsafeActivePowerLimit"
 							]
 						}
@@ -3141,7 +3169,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/FailsafeActivePowerLimit/:deviceAddress",
+							"raw": "localhost:8080/api/v1/hems/FailsafeActivePowerLimit/:deviceAddress",
 							"host": [
 								"localhost"
 							],
@@ -3149,7 +3177,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"FailsafeActivePowerLimit",
 								":deviceAddress"
 							],
@@ -3178,7 +3206,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/FailsafeActivePowerLimit/:deviceAddress",
+							"raw": "localhost:8080/api/v1/hems/FailsafeActivePowerLimit/:deviceAddress",
 							"host": [
 								"localhost"
 							],
@@ -3186,7 +3214,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"FailsafeActivePowerLimit",
 								":deviceAddress"
 							],
@@ -3206,7 +3234,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/FailsafeActivePowerLimit",
+							"raw": "localhost:8080/api/v1/hems/FailsafeActivePowerLimit",
 							"host": [
 								"localhost"
 							],
@@ -3214,7 +3242,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"FailsafeActivePowerLimit"
 							]
 						}
@@ -3227,7 +3255,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/ActivePowerLimitConstraints",
+							"raw": "localhost:8080/api/v1/hems/ActivePowerLimitConstraints",
 							"host": [
 								"localhost"
 							],
@@ -3235,7 +3263,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"ActivePowerLimitConstraints"
 							]
 						}
@@ -3248,7 +3276,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/LpcDevicesData",
+							"raw": "localhost:8080/api/v1/hems/LpcDevicesData",
 							"host": [
 								"localhost"
 							],
@@ -3256,7 +3284,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"LpcDevicesData"
 							]
 						}
@@ -3278,7 +3306,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/ActivePowerProductionLimit",
+							"raw": "localhost:8080/api/v1/hems/ActivePowerProductionLimit",
 							"host": [
 								"localhost"
 							],
@@ -3286,7 +3314,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"ActivePowerProductionLimit"
 							]
 						}
@@ -3308,7 +3336,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/ActivePowerProductionLimit",
+							"raw": "localhost:8080/api/v1/hems/ActivePowerProductionLimit",
 							"host": [
 								"localhost"
 							],
@@ -3316,7 +3344,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"ActivePowerProductionLimit"
 							]
 						}
@@ -3338,7 +3366,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/ActivePowerProductionLimit/:deviceAddress",
+							"raw": "localhost:8080/api/v1/hems/ActivePowerProductionLimit/:deviceAddress",
 							"host": [
 								"localhost"
 							],
@@ -3346,7 +3374,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"ActivePowerProductionLimit",
 								":deviceAddress"
 							],
@@ -3375,7 +3403,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/ActivePowerProductionLimit/:deviceAddress",
+							"raw": "localhost:8080/api/v1/hems/ActivePowerProductionLimit/:deviceAddress",
 							"host": [
 								"localhost"
 							],
@@ -3383,7 +3411,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"ActivePowerProductionLimit",
 								":deviceAddress"
 							],
@@ -3403,7 +3431,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/ActivePowerProductionLimit",
+							"raw": "localhost:8080/api/v1/hems/ActivePowerProductionLimit",
 							"host": [
 								"localhost"
 							],
@@ -3411,7 +3439,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"ActivePowerProductionLimit"
 							]
 						}
@@ -3433,7 +3461,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/FailsafeActivePowerProductionLimit",
+							"raw": "localhost:8080/api/v1/hems/FailsafeActivePowerProductionLimit",
 							"host": [
 								"localhost"
 							],
@@ -3441,7 +3469,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"FailsafeActivePowerProductionLimit"
 							]
 						}
@@ -3463,7 +3491,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/FailsafeActivePowerProductionLimit",
+							"raw": "localhost:8080/api/v1/hems/FailsafeActivePowerProductionLimit",
 							"host": [
 								"localhost"
 							],
@@ -3471,7 +3499,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"FailsafeActivePowerProductionLimit"
 							]
 						}
@@ -3493,7 +3521,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/FailsafeActivePowerProductionLimit/:deviceAddress",
+							"raw": "localhost:8080/api/v1/hems/FailsafeActivePowerProductionLimit/:deviceAddress",
 							"host": [
 								"localhost"
 							],
@@ -3501,7 +3529,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"FailsafeActivePowerProductionLimit",
 								":deviceAddress"
 							],
@@ -3530,7 +3558,7 @@
 							}
 						},
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/FailsafeActivePowerProductionLimit/:deviceAddress",
+							"raw": "localhost:8080/api/v1/hems/FailsafeActivePowerProductionLimit/:deviceAddress",
 							"host": [
 								"localhost"
 							],
@@ -3538,7 +3566,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"FailsafeActivePowerProductionLimit",
 								":deviceAddress"
 							],
@@ -3558,7 +3586,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/FailsafeActivePowerProductionLimit",
+							"raw": "localhost:8080/api/v1/hems/FailsafeActivePowerProductionLimit",
 							"host": [
 								"localhost"
 							],
@@ -3566,7 +3594,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"FailsafeActivePowerProductionLimit"
 							]
 						}
@@ -3579,7 +3607,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/ActivePowerProductionLimitConstraints",
+							"raw": "localhost:8080/api/v1/hems/ActivePowerProductionLimitConstraints",
 							"host": [
 								"localhost"
 							],
@@ -3587,7 +3615,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"ActivePowerProductionLimitConstraints"
 							]
 						}
@@ -3600,7 +3628,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/LppDevicesData",
+							"raw": "localhost:8080/api/v1/hems/LppDevicesData",
 							"host": [
 								"localhost"
 							],
@@ -3608,7 +3636,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"LppDevicesData"
 							]
 						}
@@ -3621,7 +3649,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "localhost:8080/api/v1/cem/MpcMeasurementData",
+							"raw": "localhost:8080/api/v1/hems/MpcMeasurementData",
 							"host": [
 								"localhost"
 							],
@@ -3629,7 +3657,7 @@
 							"path": [
 								"api",
 								"v1",
-								"cem",
+								"hems",
 								"MpcMeasurementData"
 							]
 						}
