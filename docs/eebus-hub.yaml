@@ -22,7 +22,37 @@ tags:
   - name: License
   - name: Version
   - name: Updates
+  - name: Power Limitation
 paths:
+  /powerLimitation/view:
+    get:
+      tags:
+        - Power Limitation
+      summary: Get the combined LPC/LPP view of every known device
+      description: >-
+        Returns one entry per device that participates in LPC (Limitation of Power
+        Consumption) and/or LPP (Limitation of Power Production), covering both the
+        devices the hub simulates and the external (real) devices it observes as Energy
+        Guard. A device that runs both use cases appears once with both sections filled.
+
+
+        The controllable-system state (Init, Limited, Failsafe, ...) is only present for
+        simulated devices: it is a hub-internal state machine that is not propagated over
+        the EEBUS protocol and therefore cannot be known for an external device.
+
+
+        Changes to any of this data are announced on the event stream as the
+        `LpcLppViewUpdate` event.
+      operationId: getPowerLimitationView
+      responses:
+        '200':
+          description: Combined LPC/LPP view of simulated and external devices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LpcLppViewSnapshot"
+        '500':
+          description: the simulation engine is not available
   /sim:
     post:
       tags:
@@ -181,9 +211,9 @@ paths:
         '200':
           description: Successful response
           content:
-            multipart/form-data:
+            application/json:
               schema:
-                type: string
+                $ref: "#/components/schemas/SimulationExport"
         '404':
           description: No actions found to be exported
           content:
@@ -202,9 +232,18 @@ paths:
         - SIM
       summary: Import Configuration to be loaded in the system
       operationId: importFile
+      description: >-
+        Accepts a multipart/form-data upload with a `file` field holding a
+        simulation export produced by GET /sim/export (SimulationExport). The
+        legacy bare JSON array of action objects exported by older Hub versions
+        is also accepted.
       responses:
         '200':
-          description: Successful response
+          description: >-
+            Successful response. `status` is false when the configuration was
+            rejected as already present in the running simulation; trust
+            connections that could not be restored are logged and do not fail
+            the import.
           content:
             application/json:
               schema:
@@ -213,13 +252,15 @@ paths:
                   status:
                     type: boolean
         '400':
-          description: File not found, or File size mismatch
+          description: >-
+            File not found, file size mismatch, empty file, or the file is not
+            a valid simulation export
           content:
             application/json:
               schema: 
                 $ref: "#/components/schemas/statusError"
         '500': 
-          description: Failed to load file, Failed to parse Json
+          description: Failed to load file, or the simulation engine is unavailable
           content:
             application/json:
               schema: 
@@ -489,6 +530,104 @@ paths:
                 type: string
         '404':
           description: No data to export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /sim/EVLimitLogs:
+    get:
+      tags:
+        - SIM
+      summary: Get the OPEV/OSCEV EV limit log
+      description: >
+        Returns every OPEV and OSCEV limit exchange recorded so far, in insertion
+        order. Each exchange is one entry, carrying the EV's accept/reject outcome.
+      operationId: getEVLimitLogs
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EVLimitEvent"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+    delete:
+      tags:
+        - SIM
+      summary: Clear the EV limit log
+      operationId: clearEVLimitLogs
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusOk"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /sim/ExportEVLimitLogs:
+    get:
+      tags:
+        - SIM
+      summary: Export the EV limit log to CSV
+      description: >
+        Exports the EV limit log as CSV, sorted by timestamp. Any query parameter
+        below filters the export; passing no parameters exports everything.
+      operationId: exportEVLimitLogs
+      parameters:
+        - name: useCase
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [OPEV, OSCEV]
+        - name: limitState
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [Applied, Accepted, Rejected, Expired, Timed-out]
+        - name: evId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: sourceAddress
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: destinationAddress
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response - CSV download
+          content:
+            text/csv:
+              schema:
+                type: string
+        '404':
+          description: No logs match the given filter parameters
           content:
             application/json:
               schema:
@@ -918,6 +1057,54 @@ paths:
             application/json:
               schema: 
                  $ref: "#/components/schemas/statusError"
+  /ev/{evId}/opev:
+    get:
+      tags:
+        - EV
+      summary: Get EV OPEV state
+      description: >
+        Returns the OPEV per-phase load-control limits the EV is currently operating
+        under, together with the OPEV connection, heartbeat and controller operating
+        state. Limits are read from the EV's live SPINE LoadControl feature.
+      operationId: getEVOPEVState
+      parameters:
+        - name: evId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpevEVState"
+        '400':
+          description: invalid ID number or entity is not an EV
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '403':
+          description: OPEV use case is not licensed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: no existing EV with this ID number
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '500':
+          description: engine is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
   /ev/{evId}/oscev:
     get:
       tags:
@@ -2550,12 +2737,81 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/statusError"
-  /hems/oscev/ev/{address}/current:
+  /hems/testingMode:
+    get:
+      tags:
+        - HEMS
+      summary: Get testing mode
+      description: >
+        Reports whether testing mode is active. While active, the automatic OPEV
+        round-robin and OSCEV self-consumption distribution are suspended so limits sent
+        manually from the testing UI persist for observation instead of being overwritten.
+      operationId: getHEMSTestingMode
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  testingMode:
+                    type: boolean
+        '404':
+          description: no HEMS found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
     patch:
       tags:
         - HEMS
-      summary: Send OSCEV current recommendation to an EV
-      operationId: sendHEMSOSCEVCurrentRecommendation
+      summary: Enable or disable testing mode
+      operationId: setHEMSTestingMode
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  testingMode:
+                    type: boolean
+        '400':
+          description: body must contain boolean 'enabled'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: no HEMS found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /hems/opev/ev/{address}/current:
+    patch:
+      tags:
+        - HEMS
+      summary: Manually send per-phase OPEV current limits to an EV
+      description: >
+        Writes per-phase OPEV overload-protection current limits to the EV as a partial
+        write. Only phases present in the body are written. The HEMS is a testing device:
+        values are NOT range-checked and the EV's IsLimitChangeable flag is not enforced,
+        so a tester can send arbitrary/invalid limits and observe the EV's reaction. The
+        response reports which phases were written and which were skipped because their
+        limit ID could not be discovered from the EV's descriptors.
+      operationId: sendHEMSOPEVCurrentLimit
       parameters:
         - name: address
           in: path
@@ -2568,20 +2824,101 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/OscevCurrentRecommendationRequest"
+              $ref: "#/components/schemas/OpevCurrentLimitRequest"
       responses:
         '200':
-          description: Successful response
+          description: Limit sent and accepted by the EV
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OscevCurrentRecommendationResponse"
+                type: object
+                properties:
+                  written:
+                    type: array
+                    items:
+                      type: string
+                  skipped:
+                    type: array
+                    items:
+                      type: string
         '400':
-          description: invalid current recommendation
+          description: send failed or was rejected by the EV (see err), with written/skipped phases
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  err:
+                    type: string
+                  written:
+                    type: array
+                    items:
+                      type: string
+                  skipped:
+                    type: array
+                    items:
+                      type: string
+        '403':
+          description: OPEV use case is not licensed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/statusError"
+        '404':
+          description: no HEMS found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /hems/oscev/ev/{address}/current:
+    patch:
+      tags:
+        - HEMS
+      summary: Send a per-phase OSCEV current recommendation to an EV
+      description: >
+        Sends a per-phase OSCEV current recommendation. Only phases present in the body are
+        written (partial write), and each phase's IsLimitActive is honored independently
+        (send active=false to deactivate a phase). The HEMS is a testing device: values are
+        NOT range-checked, so negative / out-of-range values are allowed.
+      operationId: sendHEMSOSCEVCurrentLimit
+      parameters:
+        - name: address
+          in: path
+          description: URL-encoded SPINE entity address of the EV
+          schema:
+            type: string
+          required: true
+          example: d:_n:SIMCT_EV-1-4b528987
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OscevCurrentLimitRequest"
+      responses:
+        '200':
+          description: Recommendation sent and accepted by the EV
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  written:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: send failed or was rejected by the EV (see err)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  err:
+                    type: string
+                  written:
+                    type: array
+                    items:
+                      type: string
         '403':
           description: OSCEV use case is not licensed or is disabled on the HEMS
           content:
@@ -2599,6 +2936,11 @@ paths:
       tags:
         - HEMS
       summary: Send OSCEV power recommendation to an EV
+      description: >
+        Sends an OSCEV power recommendation. The HEMS is a testing device: the value is NOT
+        range-checked and the EV's scenario-4 support is NOT required, so a tester can send
+        a power recommendation to an EV that does not advertise scenario 4 (or an
+        out-of-range value) and observe how it responds.
       operationId: sendHEMSOSCEVPowerRecommendation
       parameters:
         - name: address
@@ -2747,6 +3089,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/statusError"
+  /hems/opev/ev/connectedData:
+    get:
+      tags:
+        - HEMS
+      summary: Get the EVs the HEMS is connected to over OPEV
+      description: >-
+        Returns the EVs the HEMS is currently connected to over the OPEV use case,
+        sourced from the HEMS OPEV handler's remote entities (the same set the manual
+        send validates against). An EV whose EVSE is paired to a ControlBox rather than
+        the HEMS is not returned.
+      operationId: getHEMSOPEVConnectedEVs
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  evs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OpevHEMSEVConnectedEntry"
+        '403':
+          description: OPEV use case is not licensed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: no HEMS found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
   /hems/config/FuseCurrentLimit:
     patch:
       tags:
@@ -2847,13 +3224,15 @@ paths:
       operationId: listTrustConnections
       responses:
         '200':
-          description: The list of trust connections
+          description: >-
+            The list of trust connections, each annotated with its live
+            connection state (`established`).
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/TrustEdge"
+                  $ref: "#/components/schemas/TrustEdgeStatus"
     post:
       tags:
         - Trust
@@ -4065,7 +4444,7 @@ paths:
       tags:
         - HEMS
       summary: Change OHPCF state to specific device
-      operationId: sendOhpcfControl
+      operationId: UpdateOhpcfControl
       parameters:
         - name: deviceAddress
           in: path
@@ -5531,6 +5910,9 @@ paths:
         - event: saveUpdate
           data: ''
           relatedGetApi: '/sim/save'
+        - event: LpcLppViewUpdate
+          data: ''
+          relatedGetApi: '/powerLimitation/view'
   /evse/{evseId}/qr-code:
     get:
       tags:
@@ -6880,6 +7262,934 @@ paths:
                     description: State of charge percentage
         '400':
           description: Invalid ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /ev/{evId}/mode:
+    get:
+      tags:
+        - EV
+      summary: Get the EV simulation/testing mode and pinned values
+      operationId: getEvMode
+      parameters:
+        - name: evId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EVModeStatus"
+        '404':
+          description: EV not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+    patch:
+      tags:
+        - EV
+      summary: Toggle the EV simulation/testing mode
+      description: >-
+        Switches the EV between simulation and testing mode only. The pinned override
+        values are set separately via PATCH /ev/{evId}/values.
+      operationId: updateEvMode
+      parameters:
+        - name: evId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulationModeRequest"
+      responses:
+        '200':
+          description: The EV mode status after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EVModeStatus"
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: EV not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /ev/{evId}/values:
+    patch:
+      tags:
+        - EV
+      summary: Set the EV forced measurement values (testing mode only)
+      description: >-
+        Pins the EV's reported charging power/current/SoC verbatim. Requires testing
+        mode (400 otherwise). Every field optional; omitted fields keep their value.
+      operationId: updateEvValues
+      parameters:
+        - name: evId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EVForcedValuesRequest"
+      responses:
+        '200':
+          description: The EV mode and pinned values after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EVModeStatus"
+        '400':
+          description: Invalid request body or device not in testing mode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: EV not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /evse/{evseId}/mode:
+    get:
+      tags:
+        - EVSE
+      summary: Get the EVSE simulation/testing mode and pinned power
+      operationId: getEvseMode
+      parameters:
+        - name: evseId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EVSEModeStatus"
+        '404':
+          description: EVSE not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+    patch:
+      tags:
+        - EVSE
+      summary: Toggle the EVSE simulation/testing mode
+      description: >-
+        Switches the EVSE between simulation and testing mode only. The pinned override
+        values are set separately via PATCH /evse/{evseId}/values.
+      operationId: updateEvseMode
+      parameters:
+        - name: evseId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulationModeRequest"
+      responses:
+        '200':
+          description: The EVSE mode status after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EVSEModeStatus"
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: EVSE not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /evse/{evseId}/values:
+    patch:
+      tags:
+        - EVSE
+      summary: Set the EVSE forced measurement values (testing mode only)
+      description: >-
+        Pins the EVSE's reported power/current/voltage/frequency verbatim. Requires
+        testing mode (400 otherwise). Every field optional.
+      operationId: updateEvseValues
+      parameters:
+        - name: evseId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EVSEForcedValuesRequest"
+      responses:
+        '200':
+          description: The EVSE mode and pinned values after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EVSEModeStatus"
+        '400':
+          description: Invalid request body or device not in testing mode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: EVSE not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /heatpump/{heatPumpId}/mode:
+    get:
+      tags:
+        - HeatPump
+      summary: Get the heat pump simulation/testing mode and pinned power
+      operationId: getHeatPumpMode
+      parameters:
+        - name: heatPumpId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HeatPumpModeStatus"
+        '404':
+          description: Heat pump not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+    patch:
+      tags:
+        - HeatPump
+      summary: Toggle the heat pump simulation/testing mode
+      description: >-
+        Switches the heat pump between simulation and testing mode only. The pinned
+        override values are set separately via PATCH /heatpump/{heatPumpId}/values.
+      operationId: updateHeatPumpMode
+      parameters:
+        - name: heatPumpId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulationModeRequest"
+      responses:
+        '200':
+          description: The heat pump mode status after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HeatPumpModeStatus"
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: Heat pump not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /heatpump/{heatPumpId}/values:
+    patch:
+      tags:
+        - HeatPump
+      summary: Set the heat pump forced measurement values (testing mode only)
+      description: >-
+        Pins the heat pump's reported power/current/voltage/frequency verbatim.
+        Requires testing mode (400 otherwise). Every field optional.
+      operationId: updateHeatPumpValues
+      parameters:
+        - name: heatPumpId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HeatPumpForcedValuesRequest"
+      responses:
+        '200':
+          description: The heat pump mode and pinned values after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HeatPumpModeStatus"
+        '400':
+          description: Invalid request body or device not in testing mode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: Heat pump not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /inverter/{inverterId}/battery:
+    get:
+      tags:
+        - Inverter
+      summary: Get the battery configuration and live values
+      operationId: getInverterBattery
+      parameters:
+        - name: inverterId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatteryStatus"
+        '400':
+          description: The inverter has no battery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+    patch:
+      tags:
+        - Inverter
+      summary: Update the battery configuration
+      description: >-
+        Applies a partial update to the battery. Omitted fields keep their current value.
+        Setting chargingEnabled or dischargingEnabled to false is a hard limit that overrides
+        whatever COB, LPC or LPP would otherwise request.
+      operationId: updateInverterBattery
+      parameters:
+        - name: inverterId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatteryPatchRequest"
+      responses:
+        '200':
+          description: The battery configuration and live values after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatteryStatus"
+        '400':
+          description: The inverter has no battery, or a value is out of range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /inverter/{inverterId}/battery/mode:
+    patch:
+      tags:
+        - Inverter
+      summary: Toggle the battery simulation/testing mode
+      description: >-
+        Switches the battery between simulation and testing mode only. Pinned values are
+        set via PATCH /inverter/{inverterId}/battery/values.
+      operationId: updateInverterBatteryMode
+      parameters:
+        - name: inverterId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulationModeRequest"
+      responses:
+        '200':
+          description: The battery status after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatteryStatus"
+        '400':
+          description: The inverter has no battery, or an invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /inverter/{inverterId}/battery/values:
+    patch:
+      tags:
+        - Inverter
+      summary: Set the battery forced values (testing mode only)
+      description: >-
+        Pins the battery's DC/MOB overrides and operating state verbatim. Requires
+        testing mode (400 otherwise). Every field optional.
+      operationId: updateInverterBatteryValues
+      parameters:
+        - name: inverterId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatteryForcedValuesRequest"
+      responses:
+        '200':
+          description: The battery status after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatteryStatus"
+        '400':
+          description: No battery, not in testing mode, or an invalid value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /inverter/{inverterId}/mode:
+    get:
+      tags:
+        - Inverter
+      summary: Get the inverter AC-level simulation/testing mode and pinned values
+      operationId: getInverterMode
+      parameters:
+        - name: inverterId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InverterModeStatus"
+        '404':
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+    patch:
+      tags:
+        - Inverter
+      summary: Toggle the inverter AC-level simulation/testing mode
+      description: >-
+        Switches the inverter's AC report between simulation and testing mode only. The
+        pinned override values are set separately via PATCH /inverter/{inverterId}/values.
+      operationId: updateInverterMode
+      parameters:
+        - name: inverterId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulationModeRequest"
+      responses:
+        '200':
+          description: The inverter mode status after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InverterModeStatus"
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /inverter/{inverterId}/values:
+    patch:
+      tags:
+        - Inverter
+      summary: Set the inverter AC-level forced measurement values (testing mode only)
+      description: >-
+        Pins the inverter's AC MPC + MOI report verbatim. Requires testing mode (400
+        otherwise). Distinct from the battery/PV DC pins. Every field optional.
+      operationId: updateInverterValues
+      parameters:
+        - name: inverterId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InverterForcedValuesRequest"
+      responses:
+        '200':
+          description: The inverter mode and pinned values after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InverterModeStatus"
+        '400':
+          description: Invalid request body or device not in testing mode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /evse/{evseId}/forceState:
+    post:
+      tags:
+        - EVSE
+      summary: Force the EVSE controllable-system state (testing aid)
+      description: >-
+        Inject the EVSE's controllable system into a chosen state once. The real
+        state machine resumes on the next tick.
+      operationId: forceEvseState
+      parameters:
+        - name: evseId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForceCSStateRequest"
+      responses:
+        '200':
+          description: The state queued for injection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForceCSStateResponse"
+        '400':
+          description: Invalid state or no controllable system
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: EVSE not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /heatpump/{heatPumpId}/forceState:
+    post:
+      tags:
+        - HeatPump
+      summary: Force the HeatPump controllable-system state (testing aid)
+      description: >-
+        Inject the HeatPump's controllable system into a chosen state once. The real
+        state machine resumes on the next tick.
+      operationId: forceHeatPumpState
+      parameters:
+        - name: heatPumpId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForceCSStateRequest"
+      responses:
+        '200':
+          description: The state queued for injection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForceCSStateResponse"
+        '400':
+          description: Invalid state or no controllable system
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: HeatPump not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /heatpump/{heatPumpId}/forceOhpcfState:
+    post:
+      tags:
+        - HeatPump
+      summary: Force the HeatPump OHPCF power-sequence state (testing aid)
+      description: >-
+        Inject the HeatPump's OHPCF power-sequence (announced power-recommendation) state
+        directly, bypassing the transition validation of setState. The real state machine
+        resumes on the next tick. States that announce power (running/scheduled/paused)
+        need a power value; scheduled also needs a start delay.
+      operationId: forceHeatPumpOhpcfState
+      parameters:
+        - name: heatPumpId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OhpcfForceStateRequest"
+      responses:
+        '200':
+          description: The forced OHPCF state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  state:
+                    type: string
+        '400':
+          description: Invalid state, missing required value, or not in testing mode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: HeatPump not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /inverter/{inverterId}/lpc/forceState:
+    post:
+      tags:
+        - Inverter
+      summary: Force the inverter's LPC (consumption) controllable-system state
+      description: >-
+        Inject the inverter's consumption (LPC) controllable system into a chosen state
+        once. The real state machine resumes on the next tick.
+      operationId: forceInverterLpcState
+      parameters:
+        - name: inverterId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForceCSStateRequest"
+      responses:
+        '200':
+          description: The state queued for injection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForceCSStateResponse"
+        '400':
+          description: Invalid state or no controllable system
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /inverter/{inverterId}/lpp/forceState:
+    post:
+      tags:
+        - Inverter
+      summary: Force the inverter's LPP (production) controllable-system state
+      description: >-
+        Inject the inverter's production (LPP) controllable system into a chosen state
+        once. The real state machine resumes on the next tick.
+      operationId: forceInverterLppState
+      parameters:
+        - name: inverterId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForceCSStateRequest"
+      responses:
+        '200':
+          description: The state queued for injection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForceCSStateResponse"
+        '400':
+          description: Invalid state or no controllable system
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /inverter/{inverterId}/pvstring:
+    get:
+      tags:
+        - Inverter
+      summary: Get the PV string configuration and live values
+      operationId: getInverterPvString
+      parameters:
+        - name: inverterId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PVStringStatus"
+        '400':
+          description: The inverter has no PV string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+    patch:
+      tags:
+        - Inverter
+      summary: Update the PV string configuration
+      description: >-
+        Applies a partial update to the PV string. Omitted fields keep their current value.
+        Setting productionEnabled to false stops production regardless of the LPP limit.
+      operationId: updateInverterPvString
+      parameters:
+        - name: inverterId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PVStringPatchRequest"
+      responses:
+        '200':
+          description: The PV string configuration and live values after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PVStringStatus"
+        '400':
+          description: The inverter has no PV string, or a value is out of range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /inverter/{inverterId}/pvstring/mode:
+    patch:
+      tags:
+        - Inverter
+      summary: Toggle the PV string simulation/testing mode
+      description: >-
+        Switches the PV string between simulation and testing mode only. Pinned values are
+        set via PATCH /inverter/{inverterId}/pvstring/values.
+      operationId: updateInverterPvStringMode
+      parameters:
+        - name: inverterId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulationModeRequest"
+      responses:
+        '200':
+          description: The PV string status after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PVStringStatus"
+        '400':
+          description: The inverter has no PV string, or an invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '404':
+          description: Inverter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /inverter/{inverterId}/pvstring/values:
+    patch:
+      tags:
+        - Inverter
+      summary: Set the PV string forced values (testing mode only)
+      description: >-
+        Pins the PV string's DC/extra overrides verbatim. Requires testing mode (400
+        otherwise). Every field optional.
+      operationId: updateInverterPvStringValues
+      parameters:
+        - name: inverterId
+          in: path
+          schema:
+            type: integer
+          required: true
+          example: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PVStringForcedValuesRequest"
+      responses:
+        '200':
+          description: The PV string status after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PVStringStatus"
+        '400':
+          description: No PV string, not in testing mode, or an invalid value
           content:
             application/json:
               schema:
@@ -8443,137 +9753,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/testingDashboardStateSnapshot"
-
-  /testing/dut:
+  /testing/run/status:
     get:
       tags:
         - Testing
-      summary: Get configured DUT for testing
-      operationId: getTestingDUT
+      summary: Get current test run status and per-test-case results
+      operationId: getTestingRunStatus
       responses:
         '200':
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/testingDUTConfig"
-    post:
-      tags:
-        - Testing
-      summary: Configure DUT for testing
-      operationId: configureTestingDUT
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/testingDUTConfig"
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/statusOk"
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/statusError"
-
-  /testing/initial-values/apply:
-    post:
-      tags:
-        - Testing
-      summary: Apply configured DUT initial values to HEMS
-      operationId: applyTestingInitialValues
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/testingInitialValuesApplyResponse"
-        '400':
-          description: HEMS not available
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/statusError"
-        '500':
-          description: Failed to read DUT configuration
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/statusError"
-
-  /testing/discoveredDUTs:
-    get:
-      tags:
-        - Testing
-      summary: Get discovered DUTs from mDNS scan
-      operationId: getTestingDiscoveredDUTs
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-
-  /testing/testcases:
-    get:
-      tags:
-        - Testing
-      summary: Get available test cases
-      operationId: getTestingTestCases
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/testingTestCase"
-        '403':
-          description: Compliance tests are not enabled by the current license
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/statusError"
-        '503':
-          description: No compliance test cases are available for the current license filters
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/statusError"
-
-  /testing/logs:
-    get:
-      tags:
-        - Testing
-      summary: Get buffered test execution logs
-      operationId: getTestingLogs
-      parameters:
-        - name: limit
-          in: query
-          schema:
-            type: integer
-          required: false
-          description: Number of latest entries to return. Returns all if omitted or invalid.
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/testingExecutionLog"
-
+                $ref: "#/components/schemas/testingRunStatus"
   /testing/report:
     get:
       tags:
@@ -8605,33 +9797,163 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/statusError"
-
-  /testing/compliance/logs:
+  /testing/dut/environment:
     get:
       tags:
         - Testing
-      summary: Get files from the latest compliance run (content may be truncated)
-      operationId: getTestingComplianceLogs
-      parameters:
-        - name: maxBytes
-          in: query
-          required: false
-          description: Maximum bytes returned per file content. Defaults to 65536 and is capped at 2097152.
-          schema:
-            type: integer
+      summary: Get configured DUT environment
+      operationId: getTestingDUTEnvironment
       responses:
         '200':
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/testingComplianceLogsResponse"
-        '404':
-          description: Compliance log files were not found
+                $ref: "#/components/schemas/testingDUTEnvironment"
+    post:
+      tags:
+        - Testing
+      summary: Configure DUT environment
+      operationId: configureTestingDUTEnvironment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/testingDUTEnvironment"
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusOk"
+        '400':
+          description: Bad request or invalid DUT environment
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/statusError"
+        '403':
+          description: Compliance tests are not enabled by the current license
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '500':
+          description: Failed to persist testing configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /testing/dut/test-config:
+    get:
+      tags:
+        - Testing
+      summary: Get configured DUT test parameters
+      operationId: getTestingDUTTestConfig
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/testingSuiteConfig"
+                nullable: true
+    post:
+      tags:
+        - Testing
+      summary: Configure DUT test parameters
+      operationId: configureTestingDUTTestConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/testingSuiteConfig"
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusOk"
+        '400':
+          description: Bad request or invalid test configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '403':
+          description: Compliance tests are not enabled by the current license
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '500':
+          description: Failed to persist testing configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /testing/discoveredDUTs:
+    get:
+      tags:
+        - Testing
+      summary: Get discovered DUTs from mDNS scan
+      operationId: getTestingDiscoveredDUTs
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MdnsEntry"
+
+  /testing/testcases:
+    get:
+      tags:
+        - Testing
+      summary: Get available test cases
+      operationId: getTestingTestCases
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/testingTestCase"
+
+  /testing/logs:
+    get:
+      tags:
+        - Testing
+      summary: Get buffered test execution logs
+      description: Returns buffered logs as JSON. If the request is a WebSocket upgrade, streams existing and new log entries over the WebSocket connection.
+      operationId: getTestingLogs
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+          required: false
+          description: Number of latest entries to return. Returns all if omitted or invalid.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/testingExecutionLog"
+        '101':
+          description: Switching Protocols for WebSocket log streaming
 
   /testing/logs/stream:
     get:
@@ -8690,6 +10012,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/statusError"
+        '403':
+          description: Selected suite or test case is not allowed by the current license
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '500':
+          description: Failed to persist testing configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
     delete:
       tags:
         - Testing
@@ -8704,6 +10038,12 @@ paths:
                 $ref: "#/components/schemas/statusOk"
         '400':
           description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+        '500':
+          description: Failed to persist testing configuration
           content:
             application/json:
               schema:
@@ -8741,6 +10081,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/statusError"
+        '500':
+          description: Failed to persist testing configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
 
   /testing/selection/testcases/{testCaseId}:
     delete:
@@ -8774,6 +10120,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/statusError"
+        '500':
+          description: Failed to persist testing configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
 
   /testing/execute:
     post:
@@ -8781,11 +10133,6 @@ paths:
         - Testing
       summary: Start selected test execution
       operationId: executeTestingRun
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/testingExecuteRequest"
       responses:
         '202':
           description: Test run started
@@ -8799,20 +10146,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/statusError"
-
-  /testing/run:
+        '403':
+          description: Compliance tests are not enabled by the current license
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /testing/execute/cancel:
+    post:
+      tags:
+        - Testing
+      summary: Cancel the active test execution
+      operationId: cancelTestingRun
+      responses:
+        '202':
+          description: Test run cancellation requested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/testingExecuteCancelAcceptedResponse"
+        '409':
+          description: No test run is currently active
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/statusError"
+  /testing/required-config:
     get:
       tags:
         - Testing
-      summary: Get current test run status
-      operationId: getTestingRunState
+      summary: Get required DUT test configuration fields for the current selection
+      operationId: getTestingRequiredConfig
       responses:
         '200':
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/testingRunState"
+                $ref: "#/components/schemas/testingRequiredConfigResponse"
 
   /analyzer/health:
     get:
@@ -9518,6 +10889,29 @@ paths:
 
 components:
   schemas:
+    SimulationExport:
+      type: object
+      description: >-
+        Simulation configuration. Imports also accept the legacy bare
+        JSON array of action objects exported by older Hub versions.
+      required: [actions]
+      properties:
+        actions:
+          type: array
+          description: Replayable simulation configuration action log.
+          items:
+            type: object
+            additionalProperties: true
+        trustConnections:
+          type: array
+          description: >-
+            Desired mutual-trust topology, restored after device creation. Peer
+            ids are references into this export's action log, remapped to the
+            live engine ids on import; the reserved id 4294967294 (0xFFFFFFFE)
+            refers to the built-in HEMS, which has no create action. Edges whose
+            endpoints are not part of the exported configuration are omitted.
+          items:
+            $ref: "#/components/schemas/TrustEdge"
     TrustPeerRef:
       type: object
       description: >-
@@ -9544,6 +10938,23 @@ components:
           $ref: "#/components/schemas/TrustPeerRef"
         b:
           $ref: "#/components/schemas/TrustPeerRef"
+    TrustEdgeStatus:
+      description: >-
+        A mutual-trust connection annotated with its live connection state.
+        `established` is true only while the simulation is running and the
+        underlying SHIP connection is up; a configured-but-not-started topology
+        reports `established: false` for every edge.
+      allOf:
+        - $ref: "#/components/schemas/TrustEdge"
+        - type: object
+          required:
+            - established
+          properties:
+            established:
+              type: boolean
+              description: >-
+                Whether the SHIP connection for this edge is currently
+                established.
     AnalyzerHealth:
       type: object
       properties:
@@ -10201,6 +11612,100 @@ components:
           type: number
           format: double
           description: phase C current in A
+    OpevPhaseLimit:
+      title: OPEV phase limit
+      type: object
+      description: The OPEV load-control limit currently held for one phase.
+      properties:
+        phase:
+          type: string
+          enum: [a, b, c]
+        limitId:
+          type: integer
+          description: SPINE load-control limit ID backing this phase
+        valueInAmps:
+          type: number
+          format: double
+        isLimitActive:
+          type: boolean
+        isLimitChangeable:
+          type: boolean
+          description: when false, the limit may not be written by a client
+    OpevEVState:
+      title: OPEV EV state
+      type: object
+      properties:
+        opevEnabled:
+          type: boolean
+        connected:
+          type: boolean
+          description: whether an OPEV controller has completed the initial scenario
+        limits:
+          type: array
+          items:
+            $ref: "#/components/schemas/OpevPhaseLimit"
+        heartbeatStatus:
+          type: string
+          enum: [active, expired, none]
+        operatingState:
+          $ref: "#/components/schemas/DeviceErrorState"
+        lastUpdatedAt:
+          type: string
+          description: when limits were last written by a controller, absent until the first write
+          example: "2026/07/14 12:00:05"
+    EVLimitPhaseValue:
+      title: EV limit phase value
+      type: object
+      description: One phase's limit within a single write message.
+      properties:
+        limitId:
+          type: integer
+        value:
+          type: number
+          format: double
+        unit:
+          type: string
+          enum: [A, W]
+        isLimitActive:
+          type: boolean
+    EVLimitEvent:
+      title: EV limit event
+      type: object
+      description: >
+        One OPEV or OSCEV limit WRITE MESSAGE and the per-phase limits it carried.
+        A per-phase current write (OPEV, or OSCEV current) fills a/b/c; an OSCEV power
+        write fills total. Events logged as sent start in the Applied state and move to
+        Accepted or Rejected once the EV reports the outcome of the whole write.
+      properties:
+        timestamp:
+          type: string
+          example: "2026/07/14 12:00:05"
+        useCase:
+          type: string
+          enum: [OPEV, OSCEV]
+        sourceAddress:
+          type: string
+        destinationAddress:
+          type: string
+        evId:
+          type: integer
+          description: >
+            Set only for EVs simulated by this hub. Absent for remote/DUT EVs and
+            generally absent on sent events, where the CEM keys EVs by address.
+        a:
+          $ref: "#/components/schemas/EVLimitPhaseValue"
+        b:
+          $ref: "#/components/schemas/EVLimitPhaseValue"
+        c:
+          $ref: "#/components/schemas/EVLimitPhaseValue"
+        total:
+          $ref: "#/components/schemas/EVLimitPhaseValue"
+        limitState:
+          type: string
+          enum: [Applied, Accepted, Rejected, Expired, Timed-out]
+        reason:
+          type: string
+          description: populated when the write was rejected
     OscevEVState:
       title: OSCEV EV state
       type: object
@@ -10284,6 +11789,56 @@ components:
           type: integer
         discoveredStopDelayInSeconds:
           type: integer
+    OpevPhaseLimitWrite:
+      title: OPEV phase limit write
+      type: object
+      description: One phase of a manual OPEV current-limit send.
+      properties:
+        valueInAmps:
+          type: number
+          format: double
+          description: current limit in A (not range-checked — testing device)
+        isLimitActive:
+          type: boolean
+          description: defaults to true when omitted
+    OpevCurrentLimitRequest:
+      title: OPEV current limit request
+      type: object
+      description: >
+        Manual per-phase OPEV current-limit send. Only phases present (non-null) are
+        written, as a partial write.
+      properties:
+        a:
+          $ref: "#/components/schemas/OpevPhaseLimitWrite"
+        b:
+          $ref: "#/components/schemas/OpevPhaseLimitWrite"
+        c:
+          $ref: "#/components/schemas/OpevPhaseLimitWrite"
+    OscevPhaseCurrentWrite:
+      title: OSCEV phase current write
+      type: object
+      description: One phase of a manual per-phase OSCEV current recommendation.
+      properties:
+        valueInAmps:
+          type: number
+          format: double
+          description: current in A (not range-checked — testing device)
+        isLimitActive:
+          type: boolean
+          description: defaults to true when omitted; set false to deactivate this phase
+    OscevCurrentLimitRequest:
+      title: OSCEV current limit request
+      type: object
+      description: >
+        Manual per-phase OSCEV current recommendation. Only phases present (non-null) are
+        written, as a partial write.
+      properties:
+        a:
+          $ref: "#/components/schemas/OscevPhaseCurrentWrite"
+        b:
+          $ref: "#/components/schemas/OscevPhaseCurrentWrite"
+        c:
+          $ref: "#/components/schemas/OscevPhaseCurrentWrite"
     OscevCurrentRecommendationRequest:
       title: OSCEV current recommendation request
       type: object
@@ -10373,6 +11928,16 @@ components:
         stopDelayInSeconds:
           type: integer
           description: charging stop delay in seconds
+    OpevHEMSEVConnectedEntry:
+      title: OPEV HEMS connected EV entry
+      type: object
+      description: >-
+        Identifies one EV the HEMS is connected to over OPEV. OPEV carries no per-EV
+        configuration, so only the entity address is exposed.
+      properties:
+        entityAddress:
+          type: string
+          description: SPINE entity address of the EV
     EVViewSnapshot:
       title: EV view snapshot
       type: object
@@ -10418,6 +11983,8 @@ components:
           $ref: "#/components/schemas/EVViewMeasurements"
         oscev:
           $ref: "#/components/schemas/EVViewOSCEV"
+        opev:
+          $ref: "#/components/schemas/EVViewOPEV"
     EVViewAvailableSections:
       title: EV view available sections
       type: object
@@ -10430,6 +11997,26 @@ components:
           type: boolean
         oscev:
           type: boolean
+        opev:
+          type: boolean
+    EVViewOPEV:
+      title: EV view OPEV data
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        connected:
+          type: boolean
+        limits:
+          type: array
+          items:
+            $ref: "#/components/schemas/OpevPhaseLimit"
+        heartbeatStatus:
+          type: string
+        operatingState:
+          $ref: "#/components/schemas/DeviceErrorState"
+        lastUpdatedAt:
+          type: string
     EVViewCharging:
       title: EV view charging data
       type: object
@@ -11287,6 +12874,40 @@ components:
           description: Current OHPCF state
           enum: [running, paused, invalid]
 
+    MdnsEntry:
+      type: object
+      properties:
+        name:
+          type: string
+        host:
+          type: string
+        addresses:
+          type: array
+          items:
+            type: string
+        port:
+          type: integer
+        elements:
+          type: object
+          additionalProperties:
+            type: string
+
+    testingDUTEnvironment:
+      type: object
+      properties:
+        ski:
+          type: string
+          description: DUT SKI, formatted as 40 hexadecimal characters
+        shipId:
+          type: string
+        rpcUrl:
+          type: string
+          description: DUT JSON-RPC server address in host:port format
+          example: 127.0.0.1:8081
+        stopOnFirstFailure:
+          type: boolean
+          description: Stop the active run after the first failed test case.
+
     testingSuiteConfig:
       type: object
       properties:
@@ -11352,7 +12973,7 @@ components:
           type: array
           items:
             type: string
-            enum: [L1, L2, L3]
+            enum: [a, b, c]
 
     testingMpcMaCapabilities:
       type: object
@@ -11388,7 +13009,9 @@ components:
           type: string
         rpcUrl:
           type: string
-        configuration:
+        stopOnFirstFailure:
+          type: boolean
+        testConfig:
           $ref: "#/components/schemas/testingSuiteConfig"
 
     testingSelection:
@@ -11430,6 +13053,26 @@ components:
           items:
             type: string
 
+    testingTestCaseRunStatus:
+      type: object
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+        package:
+          type: string
+        status:
+          type: string
+          enum:
+            - queued
+            - inProgress
+            - passed
+            - failed
+            - skipped
+        message:
+          type: string
+
     testingRunState:
       type: object
       properties:
@@ -11438,24 +13081,33 @@ components:
           enum:
             - idle
             - running
+            - cancelling
             - completed
             - failed
-        result:
-          type: string
         progress:
           type: integer
-        currentStep:
-          type: string
         lastError:
           type: string
-        startedAtUtc:
+
+    testingRunStatus:
+      type: object
+      properties:
+        status:
           type: string
-          format: date-time
-          nullable: true
-        endedAtUtc:
+          enum:
+            - idle
+            - running
+            - cancelling
+            - completed
+            - failed
+        progress:
+          type: integer
+        lastError:
           type: string
-          format: date-time
-          nullable: true
+        testCases:
+          type: array
+          items:
+            $ref: "#/components/schemas/testingTestCaseRunStatus"
 
     testingDashboardStateSnapshot:
       type: object
@@ -11467,41 +13119,6 @@ components:
         run:
           $ref: "#/components/schemas/testingRunState"
 
-    testingExecuteRequest:
-      type: object
-      properties:
-        connectionTimeoutSeconds:
-          type: integer
-        untrustAfterRun:
-          type: boolean
-        skipDutConnectionCheck:
-          type: boolean
-
-    testingComplianceLogEntry:
-      type: object
-      properties:
-        name:
-          type: string
-        sizeBytes:
-          type: integer
-          format: int64
-        truncated:
-          type: boolean
-        content:
-          type: string
-
-    testingComplianceLogsResponse:
-      type: object
-      properties:
-        runId:
-          type: string
-        path:
-          type: string
-        files:
-          type: array
-          items:
-            $ref: "#/components/schemas/testingComplianceLogEntry"
-
     testingExecuteAcceptedResponse:
       type: object
       properties:
@@ -11509,15 +13126,20 @@ components:
           type: string
           example: started
 
-    testingInitialValuesApplyResponse:
+    testingExecuteCancelAcceptedResponse:
       type: object
       properties:
         status:
           type: string
-          example: OK
-        applied:
-          type: object
-          additionalProperties: true
+          example: cancelling
+
+    testingRequiredConfigResponse:
+      type: object
+      properties:
+        requiredConfigFields:
+          type: array
+          items:
+            type: string
 
     UseCasesAvailability:
       title: Use cases availability flags
@@ -11633,13 +13255,570 @@ components:
         inverterType:
           type: string
         batteryInfo:
-          $ref: "#/components/schemas/ControllableSystemInfo"
+          $ref: "#/components/schemas/BatteryInfo"
         pvstringInfo:
-          $ref: "#/components/schemas/ControllableSystemInfo"
+          $ref: "#/components/schemas/PVStringInfo"
         lppCS:
           $ref: "#/components/schemas/ControllableSystemInfo"
         lpcCS:
           $ref: "#/components/schemas/ControllableSystemInfo"
+    BatteryInfo:
+      title: Battery sub-entity configuration
+      type: object
+      properties:
+        deviceName:
+          type: string
+        deviceCode:
+          type: string
+        serialNumber:
+          type: string
+        softwareRev:
+          type: string
+        hardwareRev:
+          type: string
+        vendor:
+          type: object
+          properties:
+            name:
+              type: string
+            code:
+              type: string
+        brandName:
+          type: string
+        manufacturer:
+          type: object
+        deviceModel:
+          type: string
+        imgBase64:
+          type: string
+        maxPowerInWatts:
+          type: number
+          description: Maximum charge/discharge power in W. Defaults to 6000 when omitted.
+          example: 10000
+        capacityInWattHours:
+          type: number
+          description: Battery capacity in Wh. Defaults to 5000 when omitted.
+          example: 15000
+        nominalVoltageInVolts:
+          type: number
+          description: Battery DC voltage in V. Defaults to 400 when omitted.
+          example: 400
+        initialStateOfChargeInPercent:
+          type: number
+          description: State of charge the battery starts at, 0..100. Defaults to 50.
+          example: 50
+        chargingEnabled:
+          type: boolean
+          description: When false the battery cannot charge. Defaults to true.
+        dischargingEnabled:
+          type: boolean
+          description: When false the battery cannot discharge. Defaults to true.
+    PVStringInfo:
+      title: PV string sub-entity configuration
+      type: object
+      properties:
+        deviceName:
+          type: string
+        deviceCode:
+          type: string
+        serialNumber:
+          type: string
+        softwareRev:
+          type: string
+        hardwareRev:
+          type: string
+        vendor:
+          type: object
+          properties:
+            name:
+              type: string
+            code:
+              type: string
+        brandName:
+          type: string
+        manufacturer:
+          type: object
+        deviceModel:
+          type: string
+        imgBase64:
+          type: string
+        maxPowerInWatts:
+          type: number
+          description: Peak DC production power in W as a positive magnitude. Defaults to 6000.
+          example: 8000
+        nominalVoltageInVolts:
+          type: number
+          description: PV string DC voltage in V. Defaults to 400 when omitted.
+          example: 400
+        sunFactor:
+          type: number
+          description: Irradiance scaling factor, 0 (night) to 1 (full sun). Defaults to 1.
+          example: 0.75
+        productionEnabled:
+          type: boolean
+          description: When false the PV string produces no power. Defaults to true.
+    BatteryPatchRequest:
+      title: Partial battery configuration update
+      description: >-
+        Config-only. Every field is optional; an omitted field keeps its current value.
+        Testing mode and pinned values are set separately via /battery/mode and
+        /battery/values.
+      type: object
+      properties:
+        maxPowerInWatts:
+          type: number
+          description: Maximum charge/discharge power in W. Must be greater than 0.
+        capacityInWattHours:
+          type: number
+          description: Battery capacity in Wh. Must be greater than 0.
+        nominalVoltageInVolts:
+          type: number
+          description: Battery DC voltage in V. Must be greater than 0.
+        stateOfChargeInPercent:
+          type: number
+          description: Sets the live state of charge, 0..100.
+        chargingEnabled:
+          type: boolean
+        dischargingEnabled:
+          type: boolean
+    BatteryForcedValuesRequest:
+      title: Battery forced-values request
+      description: >-
+        Body of PATCH /inverter/:id/battery/values — DC/MOB overrides pinned while the
+        battery is in testing mode (400 otherwise). Every field optional.
+      type: object
+      properties:
+        forcedPowerInWatts:
+          type: number
+          description: DC battery power pinned verbatim (positive = charging, negative = discharging).
+        forcedCurrentInAmpere:
+          type: number
+          description: DC current pinned verbatim (else derived from the pinned power).
+        forcedVoltageInVolts:
+          type: number
+          description: DC voltage pinned verbatim (else the configured voltage).
+        forcedEnergyChargedInWattHours:
+          type: number
+          description: MOB energy-charged counter pinned verbatim.
+        forcedEnergyDischargedInWattHours:
+          type: number
+          description: MOB energy-discharged counter pinned verbatim.
+        forcedUsableCapacityInWattHours:
+          type: number
+          description: Usable capacity pinned verbatim.
+        forcedStateOfEnergyInWattHours:
+          type: number
+          description: Remaining energy (state of energy) pinned verbatim.
+        forcedOperatingState:
+          type: string
+          description: >-
+            DeviceDiagnosis operating state pinned verbatim. One of normalOperation,
+            standby, failure, serviceNeeded, overrideDetected, inAlarm, notReachable,
+            finished, temporarilyNotReady, off.
+          enum:
+            - normalOperation
+            - standby
+            - failure
+            - serviceNeeded
+            - overrideDetected
+            - inAlarm
+            - notReachable
+            - finished
+            - temporarilyNotReady
+            - off
+    BatteryStatus:
+      title: Battery configuration and live values
+      type: object
+      properties:
+        maxPowerInWatts:
+          type: number
+        capacityInWattHours:
+          type: number
+        nominalVoltageInVolts:
+          type: number
+        stateOfChargeInPercent:
+          type: number
+        chargingEnabled:
+          type: boolean
+        dischargingEnabled:
+          type: boolean
+        powerInWatts:
+          type: number
+          description: Live power; positive when charging, negative when discharging.
+        currentInAmpere:
+          type: number
+        energyChargedInWattHours:
+          type: number
+        energyDischargedInWattHours:
+          type: number
+        stateOfEnergyInWattHours:
+          type: number
+          description: Remaining energy (capacity × SoC).
+        operatingState:
+          type: string
+          description: The current reported DeviceDiagnosis operating state.
+        mode:
+          $ref: "#/components/schemas/DeviceSimulationMode"
+        forcedCurrentInAmpere:
+          type: number
+          nullable: true
+          description: The DC current pin active in testing mode, if any.
+        forcedVoltageInVolts:
+          type: number
+          nullable: true
+          description: The DC voltage pin active in testing mode, if any.
+        forcedOperatingState:
+          type: string
+          nullable: true
+          description: The operating-state pin active in testing mode, if any.
+    PVStringPatchRequest:
+      title: Partial PV string configuration update
+      description: >-
+        Config-only. Every field is optional; an omitted field keeps its current value.
+        Testing mode and pinned values are set separately via /pvstring/mode and
+        /pvstring/values.
+      type: object
+      properties:
+        maxPowerInWatts:
+          type: number
+          description: Peak DC production power in W as a positive magnitude. Must be greater than 0.
+        nominalVoltageInVolts:
+          type: number
+          description: PV string DC voltage in V. Must be greater than 0.
+        sunFactor:
+          type: number
+          description: Irradiance scaling factor, 0 to 1.
+        productionEnabled:
+          type: boolean
+    PVStringForcedValuesRequest:
+      title: PV string forced-values request
+      description: >-
+        Body of PATCH /inverter/:id/pvstring/values — DC/extra overrides pinned while the
+        PV string is in testing mode (400 otherwise). Every field optional.
+      type: object
+      properties:
+        forcedPowerInWatts:
+          type: number
+          description: DC production power pinned verbatim (negative = producing).
+        forcedCurrentInAmpere:
+          type: number
+          description: DC current pinned verbatim (else derived).
+        forcedVoltageInVolts:
+          type: number
+          description: DC voltage pinned verbatim (else the configured voltage).
+        forcedEnergyInWattHours:
+          type: number
+          description: DC energy counter pinned verbatim.
+        forcedInsulationResistanceInOhm:
+          type: number
+          description: Insulation resistance pinned verbatim.
+        forcedComponentTemperatureInDegC:
+          type: number
+          description: Component temperature pinned verbatim.
+    PVStringStatus:
+      title: PV string configuration and live values
+      type: object
+      properties:
+        maxPowerInWatts:
+          type: number
+        nominalVoltageInVolts:
+          type: number
+        sunFactor:
+          type: number
+        productionEnabled:
+          type: boolean
+        powerInWatts:
+          type: number
+          description: Live DC power; negative while producing.
+        currentInAmpere:
+          type: number
+        energyInWattHours:
+          type: number
+        insulationResistanceInOhm:
+          type: number
+        componentTemperatureInDegC:
+          type: number
+        mode:
+          $ref: "#/components/schemas/DeviceSimulationMode"
+        forcedCurrentInAmpere:
+          type: number
+          nullable: true
+          description: The DC current pin active in testing mode, if any.
+        forcedVoltageInVolts:
+          type: number
+          nullable: true
+          description: The DC voltage pin active in testing mode, if any.
+    DeviceSimulationMode:
+      title: Device simulation mode
+      type: string
+      enum:
+        - simulation
+        - testing
+      description: >-
+        Whether a device's reported values are driven by the hub's simulation
+        logic (simulation) or pinned to user-supplied values and reported
+        verbatim (testing, a hard override that ignores DUT limits).
+    TestingPerPhaseAC:
+      title: Per-phase AC testing-mode pins
+      description: >-
+        Per-phase AC overrides shared by every AC device. Each field is optional;
+        omitted leaves the quantity derived. Applied verbatim in testing mode.
+      type: object
+      properties:
+        forcedCurrentPhaseAInAmpere:
+          type: number
+        forcedCurrentPhaseBInAmpere:
+          type: number
+        forcedCurrentPhaseCInAmpere:
+          type: number
+        forcedVoltagePhaseAInVolts:
+          type: number
+        forcedVoltagePhaseBInVolts:
+          type: number
+        forcedVoltagePhaseCInVolts:
+          type: number
+        forcedFrequencyInHertz:
+          type: number
+    TestingPerPhasePower:
+      title: Per-phase AC power testing-mode pins
+      description: >-
+        Per-phase AC power overrides for devices whose catalog reports per-phase
+        power (inverter, EVSE). Each field is optional.
+      type: object
+      properties:
+        forcedPowerPhaseAInWatts:
+          type: number
+        forcedPowerPhaseBInWatts:
+          type: number
+        forcedPowerPhaseCInWatts:
+          type: number
+    TestingInverterMOI:
+      title: Inverter MOI (Monitoring of Inverter) testing-mode pins
+      description: >-
+        The AC quantities the inverter reports through the MOI use case beyond MPC.
+        forcedPowerFactor drives apparent and reactive power through the hub's
+        formula; the apparent/reactive fields additionally override those verbatim.
+        Every field optional.
+      type: object
+      properties:
+        forcedPowerFactor:
+          type: number
+        forcedApparentPowerTotalInVoltAmpere:
+          type: number
+        forcedApparentPowerPhaseAInVoltAmpere:
+          type: number
+        forcedApparentPowerPhaseBInVoltAmpere:
+          type: number
+        forcedApparentPowerPhaseCInVoltAmpere:
+          type: number
+        forcedReactivePowerTotalInVoltAmpere:
+          type: number
+        forcedReactivePowerPhaseAInVoltAmpere:
+          type: number
+        forcedReactivePowerPhaseBInVoltAmpere:
+          type: number
+        forcedReactivePowerPhaseCInVoltAmpere:
+          type: number
+        forcedComponentTemperatureInDegC:
+          type: number
+        forcedAcYieldTotalInWattHours:
+          type: number
+        forcedAcYieldDayInWattHours:
+          type: number
+        forcedAcYieldMonthInWattHours:
+          type: number
+        forcedAcYieldYearInWattHours:
+          type: number
+    TestingLiveReadings:
+      title: Currently-reported (effective) device values
+      description: >-
+        The device's current effective readings — the forced pins where set, the
+        simulation values elsewhere. Returned on every mode-status response so a
+        testing-mode form can open pre-filled with the current values. Per-phase power
+        is absent for devices with no per-phase power (heat pump, EV).
+      type: object
+      properties:
+        totalPowerInWatts:
+          type: number
+        powerPhaseAInWatts:
+          type: number
+        powerPhaseBInWatts:
+          type: number
+        powerPhaseCInWatts:
+          type: number
+        currentPhaseAInAmpere:
+          type: number
+        currentPhaseBInAmpere:
+          type: number
+        currentPhaseCInAmpere:
+          type: number
+        voltagePhaseAInVolts:
+          type: number
+        voltagePhaseBInVolts:
+          type: number
+        voltagePhaseCInVolts:
+          type: number
+        frequencyInHertz:
+          type: number
+        stateOfChargeInPercent:
+          type: number
+          description: Set only for the EV.
+        powerFactor:
+          type: number
+          description: MOI live values, set only for the inverter.
+        apparentPowerTotalInVoltAmpere:
+          type: number
+        reactivePowerTotalInVoltAmpere:
+          type: number
+        componentTemperatureInDegC:
+          type: number
+        acYieldTotalInWattHours:
+          type: number
+        acYieldDayInWattHours:
+          type: number
+        acYieldMonthInWattHours:
+          type: number
+        acYieldYearInWattHours:
+          type: number
+    SimulationModeRequest:
+      title: Simulation/testing mode toggle
+      description: Body of PATCH /{device}/:id/mode — toggles the mode only.
+      type: object
+      required:
+        - testingMode
+      properties:
+        testingMode:
+          type: boolean
+          description: True enables testing mode, false returns to simulation.
+    EVForcedValuesRequest:
+      title: EV forced-values request
+      description: >-
+        Body of PATCH /ev/:id/values — measurement overrides pinned while in testing
+        mode. Every field is optional; an omitted field keeps its current value.
+      allOf:
+        - $ref: "#/components/schemas/TestingPerPhaseAC"
+        - type: object
+          properties:
+            forcedPowerInWatts:
+              type: number
+              description: Total AC charging power pinned in testing mode (positive = charging, negative = discharging).
+            forcedStateOfChargeInPercent:
+              type: number
+              description: State of charge pinned in testing mode, 0..100.
+    EVModeStatus:
+      title: EV simulation/testing mode status
+      allOf:
+        - $ref: "#/components/schemas/TestingPerPhaseAC"
+        - type: object
+          properties:
+            mode:
+              $ref: "#/components/schemas/DeviceSimulationMode"
+            forcedPowerInWatts:
+              type: number
+              nullable: true
+            forcedStateOfChargeInPercent:
+              type: number
+              nullable: true
+            live:
+              $ref: "#/components/schemas/TestingLiveReadings"
+    EVSEForcedValuesRequest:
+      title: EVSE forced-values request
+      description: >-
+        Body of PATCH /evse/:id/values — measurement overrides pinned while in testing
+        mode. Every field is optional; an omitted field keeps its current value.
+      allOf:
+        - $ref: "#/components/schemas/TestingPerPhaseAC"
+        - $ref: "#/components/schemas/TestingPerPhasePower"
+        - type: object
+          properties:
+            forcedPowerInWatts:
+              type: number
+              description: Total power pinned in testing mode, split evenly across the three phases.
+    EVSEModeStatus:
+      title: EVSE simulation/testing mode status
+      allOf:
+        - $ref: "#/components/schemas/TestingPerPhaseAC"
+        - $ref: "#/components/schemas/TestingPerPhasePower"
+        - type: object
+          properties:
+            mode:
+              $ref: "#/components/schemas/DeviceSimulationMode"
+            forcedPowerInWatts:
+              type: number
+              nullable: true
+            currentState:
+              $ref: "#/components/schemas/CSState"
+            live:
+              $ref: "#/components/schemas/TestingLiveReadings"
+    HeatPumpForcedValuesRequest:
+      title: Heat pump forced-values request
+      description: >-
+        Body of PATCH /heatpump/:id/values — measurement overrides pinned while in
+        testing mode. Every field is optional; an omitted field keeps its current value.
+      allOf:
+        - $ref: "#/components/schemas/TestingPerPhaseAC"
+        - type: object
+          properties:
+            forcedPowerInWatts:
+              type: number
+              description: Total power pinned in testing mode.
+    HeatPumpModeStatus:
+      title: Heat pump simulation/testing mode status
+      allOf:
+        - $ref: "#/components/schemas/TestingPerPhaseAC"
+        - type: object
+          properties:
+            mode:
+              $ref: "#/components/schemas/DeviceSimulationMode"
+            forcedPowerInWatts:
+              type: number
+              nullable: true
+            currentState:
+              $ref: "#/components/schemas/CSState"
+            ohpcfState:
+              type: string
+              description: >-
+                Live OHPCF power-sequence state (empty only if OHPCF not supported).
+            ohpcfSupported:
+              type: boolean
+              description: >-
+                True when the heatpump exposes the OHPCF feature; the UI shows the
+                Force OHPCF State control only then.
+            live:
+              $ref: "#/components/schemas/TestingLiveReadings"
+    InverterForcedValuesRequest:
+      title: Inverter AC-level forced-values request
+      description: >-
+        Body of PATCH /inverter/:id/values — pins the inverter's AC MPC report verbatim
+        while in testing mode. The inverter's AC values are otherwise derived from its
+        battery/PV sub-devices. The inverter reports no per-phase power over SPINE, so it
+        has no per-phase power pins. Every field optional.
+      allOf:
+        - $ref: "#/components/schemas/TestingPerPhaseAC"
+        - $ref: "#/components/schemas/TestingInverterMOI"
+        - type: object
+          properties:
+            forcedTotalPowerInWatts:
+              type: number
+              description: Total AC power pinned in testing mode.
+    InverterModeStatus:
+      title: Inverter AC-level simulation/testing mode status
+      allOf:
+        - $ref: "#/components/schemas/TestingPerPhaseAC"
+        - $ref: "#/components/schemas/TestingInverterMOI"
+        - type: object
+          properties:
+            mode:
+              $ref: "#/components/schemas/DeviceSimulationMode"
+            forcedTotalPowerInWatts:
+              type: number
+              nullable: true
+            lpcState:
+              $ref: "#/components/schemas/CSState"
+            lppState:
+              $ref: "#/components/schemas/CSState"
+            live:
+              $ref: "#/components/schemas/TestingLiveReadings"
     InverterControlBlock:
       title: Inverter status and control information
       type: object
@@ -11699,6 +13878,115 @@ components:
           type: string
         deviceAddress:
           type: string
+    LpcLppViewSnapshot:
+      title: LPC/LPP limitation view snapshot
+      type: object
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: "#/components/schemas/LpcLppViewEntry"
+        simulatedCount:
+          type: integer
+          description: Number of entries sourced from the hub's own simulated devices.
+        externalCount:
+          type: integer
+          description: Number of entries sourced from external devices observed as Energy Guard.
+    LpcLppViewEntry:
+      title: LPC/LPP limitation view entry
+      type: object
+      properties:
+        displayName:
+          type: string
+          description: >-
+            Configured device name for simulated devices; the SPINE device address for
+            external ones.
+        deviceAddress:
+          type: string
+          description: SPINE device address. Empty while a simulated device's EEBUS service is not running.
+        ski:
+          type: string
+          description: SHIP SKI of the device.
+        source:
+          type: string
+          enum:
+            - simulated
+            - external
+        simulatedEntityId:
+          type: integer
+          description: Engine entity id. Only present when source is `simulated`.
+        availableUseCases:
+          $ref: "#/components/schemas/LpcLppViewUseCases"
+        lpc:
+          $ref: "#/components/schemas/LpcLppViewLpcSection"
+        lpp:
+          $ref: "#/components/schemas/LpcLppViewLppSection"
+    LpcLppViewUseCases:
+      title: LPC/LPP use case availability
+      type: object
+      properties:
+        lpc:
+          type: boolean
+        lpp:
+          type: boolean
+    LpcLppViewLpcSection:
+      title: LPC block of a limitation view entry
+      type: object
+      properties:
+        state:
+          allOf:
+            - $ref: "#/components/schemas/CSState"
+          description: >-
+            Controllable system state. Only present for simulated devices — the state
+            machine is hub-internal and is not propagated over EEBUS.
+        activePowerConsumptionLimit:
+          $ref: "#/components/schemas/lpcAPCL"
+        failsafeActivePowerConsumption:
+          $ref: "#/components/schemas/FCAPL"
+        powerConsumptionConstraints:
+          $ref: "#/components/schemas/LpcLppViewConsumptionConstraints"
+    LpcLppViewLppSection:
+      title: LPP block of a limitation view entry
+      type: object
+      properties:
+        state:
+          allOf:
+            - $ref: "#/components/schemas/CSState"
+          description: >-
+            Controllable system state. Only present for simulated devices — the state
+            machine is hub-internal and is not propagated over EEBUS.
+        activePowerProductionLimit:
+          $ref: "#/components/schemas/lppAPPL"
+        failsafeActivePowerProduction:
+          $ref: "#/components/schemas/lppFSAPPL"
+        powerProductionConstraints:
+          $ref: "#/components/schemas/LpcLppViewProductionConstraints"
+    LpcLppViewConsumptionConstraints:
+      title: LPC power consumption constraints
+      description: >-
+        A controllable system declares only the maximum that bounds it — an energy
+        management system its contractual maximum, every other device type its own
+        nominal maximum. The inapplicable field is omitted rather than reported as zero,
+        so an absent field means "not declared by this device".
+        LpcLppViewProductionConstraints follows the same convention.
+      type: object
+      properties:
+        powerConsumptionNominalMax:
+          type: number
+        contractualConsumptionNominalMax:
+          type: number
+    LpcLppViewProductionConstraints:
+      title: LPP power production constraints
+      description: >-
+        The production-side mirror of LpcLppViewConsumptionConstraints, with the same
+        omit-when-inapplicable convention: an absent field means "not declared by this
+        device", never "declared as zero".
+      type: object
+      properties:
+        powerProductionNominalMax:
+          type: number
+        contractualProductionNominalMax:
+          type: number
     LpcDeviceData:
       title: LPC data for a specific device
       type: object
@@ -11898,6 +14186,98 @@ components:
         - Unlimited/Controlled
         - Failsafe
         - Unlimited/Autonomous
+    ForceCSStateRequest:
+      title: Force Controllable System State request
+      type: object
+      description: >-
+        Testing aid: inject the controllable system into a chosen state once, so a
+        tester can start a scenario with the device already in that state. The real
+        state machine resumes on the next tick — incoming limit writes are processed
+        and transitions out of the forced state follow the normal FSM.
+      required:
+        - state
+      properties:
+        state:
+          $ref: "#/components/schemas/CSState"
+        limitValueInWatts:
+          type: number
+          description: >-
+            Used only when state is "Limited": the power limit the CS reports while
+            limited (a positive magnitude; the production LPP CS reports it as
+            negative). Required for "Limited" — without it the CS advertises the
+            default 0 W limit.
+          example: 5000
+        durationInSeconds:
+          type: number
+          description: >-
+            Used only when state is "Limited" and durationIndefinite is false: the
+            finite duration after which the state machine leaves Limited.
+          example: 600
+        durationIndefinite:
+          type: boolean
+          description: >-
+            Used only when state is "Limited": when true the limit has no duration and
+            persists until another transition; when false a durationInSeconds is required.
+          example: false
+    ForceCSStateResponse:
+      title: Force Controllable System State response
+      type: object
+      properties:
+        state:
+          $ref: "#/components/schemas/CSState"
+    OhpcfForceStateRequest:
+      title: Force HeatPump OHPCF power-sequence state request
+      type: object
+      description: >-
+        Testing aid: inject the heatpump's OHPCF power-sequence (announced
+        power-recommendation) state directly, bypassing transition validation.
+      required:
+        - state
+      properties:
+        state:
+          type: string
+          enum:
+            - inactive
+            - scheduled
+            - running
+            - paused
+            - completed
+            - invalid
+        powerMaxInWatts:
+          type: number
+          description: >-
+            Announced max power. Required for running and scheduled; optional for paused
+            (falls back to a prior announcement). Ignored for inactive/completed/invalid.
+          example: 5000
+        startDelayInSeconds:
+          type: number
+          description: >-
+            Delay from now until the scheduled run starts. Required for scheduled.
+          example: 600
+        activeDurationMinInSeconds:
+          type: number
+          description: >-
+            Minimum active duration of the announced process. Optional — falls back to
+            the heatpump config, then to a default (300 s).
+          example: 300
+        pauseDurationMinInSeconds:
+          type: number
+          description: >-
+            Minimum pause duration of the announced process. Optional — falls back to
+            the heatpump config, then to a default (60 s).
+          example: 60
+        isPausable:
+          type: boolean
+          description: >-
+            Whether the announced process can be paused. Optional (default true). At
+            least one of isPausable/isStoppable must be true.
+          example: true
+        isStoppable:
+          type: boolean
+          description: >-
+            Whether the announced process can be stopped. Optional (default true). At
+            least one of isPausable/isStoppable must be true.
+          example: true
     MeasurementDataElement:
       title: Measurement data element
       type: object
@@ -11977,21 +14357,92 @@ components:
         voltageCA: { type: number, description: "Scenario 6 — voltage C→A, V" }
         frequencyHz: { type: number, description: "Scenario 7 — grid frequency, Hz" }
         pvCurtailmentLimitFactorPct: { type: number, description: "Scenario 1 — PV feed-in curtailment limit factor, percentage 0-100" }
+    LicenseCapability:
+      title: Licensable capability
+      type: object
+      description: >
+        A single licensable item (device, use case or feature) with its human readable
+        name and whether the current license grants it.
+      properties:
+        id:
+          type: string
+          description: Stable identifier, e.g. "inverter", "lpc" or "eebusAnalyzer".
+          example: lpc
+        name:
+          type: string
+          description: Full human readable name, e.g. "Limitation of Power Consumption".
+          example: Limitation of Power Consumption
+        supported:
+          type: boolean
+          description: Whether the current license grants this capability.
+      required:
+        - id
+        - name
+        - supported
     LicenseData:
       title: License information
       type: object
       properties:
-        licenseKey:
+        customerName:
           type: string
-        expiryDate:
+        email:
+          type: string
+        issueTime:
           type: string
           format: date-time
-        features:
-          type: array
-          items:
-            type: string
+        expiryTime:
+          type: string
+          format: date-time
         valid:
           type: boolean
+          description: Whether the license is currently valid (signed, issued and not expired).
+        allowedEntities:
+          type: array
+          description: Raw device kinds granted by the license. Omitted when the license grants all defaults.
+          items:
+            type: string
+          example: ["inverter", "heatpump"]
+        allowedUsecases:
+          type: array
+          description: Raw use case abbreviations granted by the license. Omitted when the license grants all defaults.
+          items:
+            type: string
+          example: ["lpc", "moi"]
+        cAllowedUsecases:
+          type: array
+          description: Use cases the compliance test pipeline may run.
+          items:
+            type: string
+        cAllowedActors:
+          type: array
+          description: Actors the compliance test pipeline may run.
+          items:
+            type: string
+        devices:
+          type: array
+          description: >
+            The full catalogue of simulated device kinds, mapped from the license's allowed
+            entities. Devices the license does not grant are included with supported=false so
+            the UI can render them as unavailable. Device kinds granted by the license but
+            unknown to this build are appended with supported=true.
+          items:
+            $ref: "#/components/schemas/LicenseCapability"
+        usecases:
+          type: array
+          description: >
+            The full catalogue of use cases, each abbreviation resolved to its full EEBUS name.
+            Use cases the license does not grant are included with supported=false. Use cases
+            granted by the license but not implemented by this build are appended with
+            supported=true.
+          items:
+            $ref: "#/components/schemas/LicenseCapability"
+        features:
+          type: array
+          description: >
+            Non use-case features (shipPairingService, modbusMeter, complianceTests,
+            eebusAnalyzer, robotFramework), including the unsupported ones with supported=false.
+          items:
+            $ref: "#/components/schemas/LicenseCapability"
         spsSupported:
           type: boolean
           description: Whether the SHIP pairing service feature is licensed.
@@ -12004,3 +14455,6 @@ components:
         eebusAnalyzerSupported:
           type: boolean
           description: Whether the EEBUS Analyzer feature is licensed. When false, all /analyzer/* endpoints return 403.
+        robotFrameworkSupported:
+          type: boolean
+          description: Whether the Robot Framework test layer is licensed.
